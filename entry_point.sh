@@ -13,11 +13,20 @@ Xvfb $DISPLAY -screen 0 $GEOMETRY -ac +extension RANDR &
 # start websockify / novnc
 bash /novnc/utils/launch.sh --vnc localhost:5900 &
 
+if [[ -n "$PROXY_HOST" ]]; then
+    export http_proxy=http://$PROXY_HOST:$PROXY_PORT
+    export https_proxy=http://$PROXY_HOST:$PROXY_PORT
 
-export http_proxy=http://netcapsule_pywb_1:8080
-export https_proxy=http://netcapsule_pywb_1:8080
-wget -O /dev/null "http://set.pywb.proxy/setts?ts=$TS"
+    if [[ -z "$PROXY_PORT" ]]; then
+        export PROXY_PORT=8080
+    fi
 
+    if [[ -z "$PROXY_GET_CA" ]]; then
+        export PROXY_GET_CA=http://mitm.it/cert/pem
+    fi
+fi
+
+#wget -O /dev/null "http://set.pywb.proxy/setts?ts=$TS"
 
 function shutdown {
   kill -s SIGTERM $NODE_PID
@@ -31,12 +40,8 @@ sudo chmod a-x /bin/*term
 # Run browser here
 eval "$@" &
   
-MY_IP=$(head -n 1 /etc/hosts | cut -f 1)
-
-PYWB_IP=$(grep netcapsule_pywb_1 /etc/hosts | cut -f 1 | head -n 1)
-
 # start controller app
-python /app/browser_app.py --my-ip "$MY_IP" --pywb-ip "$PYWB_IP" --start-url "$URL" --start-ts "$TS" &
+python /app/browser_app.py &
 
 NODE_PID=$!
 

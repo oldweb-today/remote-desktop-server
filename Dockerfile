@@ -53,6 +53,10 @@ COPY requirements.txt /app/
 
 RUN pip install -U -r requirements.txt
 
+ADD run_browser /usr/bin/run_browser
+
+ADD launch.sh /novnc/utils/launch.sh
+
 COPY entry_point.sh /app/entry_point.sh
 
 CMD /app/entry_point.sh
