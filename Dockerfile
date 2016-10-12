@@ -57,6 +57,8 @@ ADD run_browser /usr/bin/run_browser
 
 ADD launch.sh /novnc/utils/launch.sh
 
+ADD browser_app.py /app/browser_app.py
+
 COPY entry_point.sh /app/entry_point.sh
 
 CMD /app/entry_point.sh
