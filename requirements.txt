@@ -1,5 +1,1 @@
-requests
-bottle
-redis
-gevent
-bottle-websocket
+websockify

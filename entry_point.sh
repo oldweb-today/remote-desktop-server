@@ -5,25 +5,17 @@ mkdir -p ~/.vnc
 x11vnc -storepasswd secret ~/.vnc/passwd
 
 # start xvfb
-Xvfb $DISPLAY -screen 0 $GEOMETRY -ac +extension RANDR &
+sudo Xvfb $DISPLAY -screen 0 $GEOMETRY -ac +extension RANDR &
 
 # start fluxbox
 #fluxbox -display $DISPLAY -log /tmp/fluxbox.log &
 
 # start websockify / novnc
-bash /novnc/utils/launch.sh --vnc localhost:5900 &
+#bash /novnc/utils/launch.sh --vnc localhost:5900 &
 
 if [[ -n "$PROXY_HOST" ]]; then
     export http_proxy=http://$PROXY_HOST:$PROXY_PORT
     export https_proxy=http://$PROXY_HOST:$PROXY_PORT
-
-    if [[ -z "$PROXY_PORT" ]]; then
-        export PROXY_PORT=8080
-    fi
-
-    if [[ -z "$PROXY_GET_CA" ]]; then
-        export PROXY_GET_CA=http://mitm.it/cert/pem
-    fi
 fi
 
 #wget -O /dev/null "http://set.pywb.proxy/setts?ts=$TS"
@@ -41,7 +33,14 @@ sudo chmod a-x /bin/*term
 eval "$@" &
   
 # start controller app
-python /app/browser_app.py &
+#python /app/browser_app.py &
+
+# start vnc
+x11vnc -forever -ncache_cr -xdamage -usepw -shared -rfbport 5900 -display $DISPLAY &
+
+
+# run websockify
+websockify --idle-timeout $IDLE_TIMEOUT 6080 localhost:5900 &
 
 NODE_PID=$!
 
@@ -55,9 +54,5 @@ do
   echo Waiting xvfb...
   sleep 0.5
 done
-
-# start vnc
-x11vnc -forever -ncache_cr -xdamage -usepw -shared -rfbport 5900 -display $DISPLAY &
-
 
 wait $NODE_PID

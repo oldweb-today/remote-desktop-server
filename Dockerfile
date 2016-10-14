@@ -8,6 +8,10 @@ ENV SCREEN_HEIGHT 1020
 ENV SCREEN_DEPTH 16
 ENV DISPLAY :99
 
+ENV PROXY_PORT 8080
+ENV PROXY_GET_CA http://mitm.it/cert/pem
+ENV IDLE_TIMEOUT 60
+
 RUN apt-get -y update && \
     apt-get -qqy install \
     git \
@@ -41,11 +45,11 @@ RUN sudo useradd browser --shell /bin/bash --create-home \
   && echo 'ALL ALL = (ALL) NOPASSWD: ALL' >> /etc/sudoers \
   && echo 'browser:secret' | chpasswd
 
-WORKDIR /novnc
+#WORKDIR /novnc
 
-RUN git clone https://github.com/kanaka/noVNC.git /novnc
+#RUN git clone https://github.com/kanaka/noVNC.git /novnc
 
-RUN git clone https://github.com/kanaka/websockify.git /novnc/utils/websockify
+#RUN git clone https://github.com/kanaka/websockify.git /novnc/utils/websockify
 
 WORKDIR /app/
 
@@ -55,9 +59,9 @@ RUN pip install -U -r requirements.txt
 
 ADD run_browser /usr/bin/run_browser
 
-ADD launch.sh /novnc/utils/launch.sh
+#ADD launch.sh /novnc/utils/launch.sh
 
-ADD browser_app.py /app/browser_app.py
+#ADD browser_app.py /app/browser_app.py
 
 COPY entry_point.sh /app/entry_point.sh
 
