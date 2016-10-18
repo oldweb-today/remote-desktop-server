@@ -27,7 +27,8 @@ RUN apt-get -y update && \
     curl \
     wget \
     vim \
-    socat
+    socat \
+    jwm
 
 RUN apt-get -qqy install \
     fonts-ipafont-gothic \
@@ -49,6 +50,8 @@ RUN sudo useradd browser --shell /bin/bash --create-home \
 WORKDIR /app/
 
 COPY requirements.txt /app/
+
+COPY jwmrc /home/browser/.jwmrc
 
 RUN pip install -U -r requirements.txt
 

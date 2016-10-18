@@ -1,0 +1,26 @@
+<?xml version="1.0"?>
+<JWM>
+   <Group>
+      <Name>.*</Name>
+      <Option>maximized</Option>
+      <Option>border</Option>
+   </Group>
+   <WindowStyle>
+      <Font>-*-fixed-*-r-*-*-10-*-*-*-*-*-*-*</Font>
+      <Width>1</Width>
+      <Height>20</Height>
+
+      <Active>
+         <Foreground>white</Foreground>
+         <Background>gray30:gray60</Background>
+         <Outline>black</Outline>
+         <Opacity>1.0</Opacity>
+      </Active>
+
+      <Foreground>#aaaaaa</Foreground>
+      <Background>#808488:#303438</Background>
+      <Outline>black</Outline>
+      <Opacity>0.5:0.9:0.1</Opacity>
+
+   </WindowStyle>
+</JWM>
