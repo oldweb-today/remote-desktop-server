@@ -1,4 +1,4 @@
-FROM debian:jessie
+FROM ubuntu:xenial
 
 ENV TS 1996
 ENV URL about:blank
@@ -26,7 +26,8 @@ RUN apt-get -y update && \
     xvfb \
     curl \
     wget \
-    vim
+    vim \
+    socat
 
 RUN apt-get -qqy install \
     fonts-ipafont-gothic \
@@ -45,12 +46,6 @@ RUN sudo useradd browser --shell /bin/bash --create-home \
   && echo 'ALL ALL = (ALL) NOPASSWD: ALL' >> /etc/sudoers \
   && echo 'browser:secret' | chpasswd
 
-#WORKDIR /novnc
-
-#RUN git clone https://github.com/kanaka/noVNC.git /novnc
-
-#RUN git clone https://github.com/kanaka/websockify.git /novnc/utils/websockify
-
 WORKDIR /app/
 
 COPY requirements.txt /app/
@@ -58,10 +53,6 @@ COPY requirements.txt /app/
 RUN pip install -U -r requirements.txt
 
 ADD run_browser /usr/bin/run_browser
-
-#ADD launch.sh /novnc/utils/launch.sh
-
-#ADD browser_app.py /app/browser_app.py
 
 COPY entry_point.sh /app/entry_point.sh
 
