@@ -2,7 +2,7 @@
 export GEOMETRY="$SCREEN_WIDTH""x""$SCREEN_HEIGHT""x""$SCREEN_DEPTH"
 
 mkdir -p ~/.vnc 
-x11vnc -storepasswd secret ~/.vnc/passwd
+x11vnc -storepasswd ${VNC_PASS:-secret} ~/.vnc/passwd
 
 # start xvfb
 sudo Xvfb $DISPLAY -screen 0 $GEOMETRY -ac +extension RANDR &
