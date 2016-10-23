@@ -22,13 +22,15 @@ RUN apt-get -y update && \
     python-openssl \
     libssl-dev libffi-dev \
     net-tools \
+    libnss3-tools \
     x11vnc \
     xvfb \
     curl \
     wget \
     vim \
     socat \
-    jwm
+    jwm \
+    autocutsel
 
 RUN apt-get -qqy install \
     fonts-ipafont-gothic \

@@ -5,7 +5,7 @@ mkdir -p ~/.vnc
 x11vnc -storepasswd ${VNC_PASS:-secret} ~/.vnc/passwd
 
 # start xvfb
-sudo Xvfb $DISPLAY -screen 0 $GEOMETRY -ac +extension RANDR &
+sudo Xvfb $DISPLAY -screen 0 $GEOMETRY -ac +extension RANDR > /dev/null 2>&1 &
 
 # start fluxbox
 #fluxbox -display $DISPLAY -log /tmp/fluxbox.log &
@@ -35,12 +35,14 @@ eval "$@" &
 # start controller app
 #python /app/browser_app.py &
 
+autocutsel -s PRIMARY -fork
+
 # start vnc
-x11vnc -forever -ncache_cr -xdamage -usepw -shared -rfbport 5900 -display $DISPLAY &
+x11vnc -forever -ncache_cr -xdamage -usepw -shared -rfbport 5900 -display $DISPLAY > /dev/null 2>&1 &
 
 
 # run websockify
-websockify --idle-timeout $IDLE_TIMEOUT 6080 localhost:5900 &
+websockify --idle-timeout $IDLE_TIMEOUT 6080 localhost:5900 > /dev/null 2>&1 &
 
 NODE_PID=$!
 
