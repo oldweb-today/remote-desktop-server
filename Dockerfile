@@ -10,7 +10,7 @@ ENV DISPLAY :99
 
 ENV PROXY_PORT 8080
 ENV PROXY_GET_CA http://mitm.it/cert/pem
-ENV IDLE_TIMEOUT 60
+ENV IDLE_TIMEOUT ""
 
 RUN apt-get -y update && \
     apt-get -qqy install \
@@ -42,6 +42,9 @@ RUN apt-get -qqy install \
     fonts-liberation \
     fonts-arphic-bkai00mp fonts-arphic-bsmi00lp fonts-arphic-gbsn00lp fonts-arphic-gkai00mp fonts-arphic-ukai fonts-farsiweb fonts-nafees fonts-sil-abyssinica fonts-sil-ezra fonts-sil-padauk fonts-unfonts-extra fonts-unfonts-core fonts-indic fonts-thai-tlwg fonts-lklug-sinhala \
   && easy_install --upgrade pip \
+  && rm -rf /var/lib/apt/lists/*
+
+RUN apt-get update && apt-get install -qqy pulseaudio
   && rm -rf /var/lib/apt/lists/*
 
 RUN sudo useradd browser --shell /bin/bash --create-home \

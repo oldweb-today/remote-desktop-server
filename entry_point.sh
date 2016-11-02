@@ -41,8 +41,14 @@ autocutsel -s PRIMARY -fork
 x11vnc -forever -ncache_cr -xdamage -usepw -shared -rfbport 5900 -display $DISPLAY > /dev/null 2>&1 &
 
 
+TIMEOUT_PARAM=""
+# add idle-timeout if var set
+if [[ -n "$IDLE_TIMEOUT" ]]; then
+    TIMEOUT_PARAM="--idle-timeout $IDLE_TIMEOUT"
+fi
+
 # run websockify
-websockify --idle-timeout $IDLE_TIMEOUT 6080 localhost:5900 > /dev/null 2>&1 &
+websockify $TIMEOUT_PARAM 6080 localhost:5900 > /dev/null 2>&1 &
 
 NODE_PID=$!
 
