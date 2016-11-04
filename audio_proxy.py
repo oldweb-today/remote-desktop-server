@@ -18,10 +18,25 @@ def load_tcp():
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             sock.connect(('localhost', 4720))
 
+            last_len = -1
+            last_len2 = -1
+            min_size = 4000
+            min_packets = 8
+            count = 0
+
             while True:
                 buff = sock.recv(16384)
-                print(len(buff))
-                q.put(buff)
+                len_ = len(buff)
+                if len_ == last_len and last_len == last_len2 and len_ < min_size:
+                    print('Skipping Silence!')
+                    continue
+
+                # queue only if connected or first few packets
+                if connected or count < min_packets:
+                    q.put(buff)
+
+                last_len2 = last_len
+                last_len = len_
 
         except Exception as e:
             print('Stream Error', e)

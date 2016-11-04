@@ -44,7 +44,7 @@ RUN apt-get -qqy install \
   && easy_install --upgrade pip \
   && rm -rf /var/lib/apt/lists/*
 
-RUN apt-get update && apt-get install -qqy pulseaudio libopus-dev libmp3lame-dev \
+RUN apt-get update && apt-get install -qqy pulseaudio libopus-dev libmp3lame-dev dnsutils \
   && rm -rf /var/lib/apt/lists/*
 
 RUN sudo useradd browser --shell /bin/bash --create-home \
@@ -62,6 +62,7 @@ RUN pip install -U -r requirements.txt
 
 ADD run_browser /usr/bin/run_browser
 
+ADD ffmpeg3.2.tar.gz /app/
 COPY audio_proxy.py /app/audio_proxy.py
 
 COPY entry_point.sh /app/entry_point.sh
