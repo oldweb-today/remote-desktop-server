@@ -7,11 +7,11 @@ x11vnc -storepasswd ${VNC_PASS:-secret} ~/.vnc/passwd
 # start xvfb
 sudo Xvfb $DISPLAY -screen 0 $GEOMETRY -ac +extension RANDR > /dev/null 2>&1 &
 
-# start fluxbox
-#fluxbox -display $DISPLAY -log /tmp/fluxbox.log &
+# start ffmpeg
+run_browser /app/ffmpeg -re -f pulse -i default -ac 1 -c:a libopus -ab 64k -compression_level 5 -frame_duration 2.5 -application lowdelay -listen 1 -f webm tcp://0.0.0.0:4720 > /tmp/ffmpeg.log 2>&1 &
 
-# start websockify / novnc
-#bash /novnc/utils/launch.sh --vnc localhost:5900 &
+# start audio proxy
+uwsgi --http-socket :6082 --gevent 4 --wsgi-file /app/audio_proxy.py &
 
 if [[ -n "$PROXY_HOST" ]]; then
     export http_proxy=http://$PROXY_HOST:$PROXY_PORT

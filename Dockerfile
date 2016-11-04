@@ -62,6 +62,8 @@ RUN pip install -U -r requirements.txt
 
 ADD run_browser /usr/bin/run_browser
 
+COPY audio_proxy.py /app/audio_proxy.py
+
 COPY entry_point.sh /app/entry_point.sh
 
 CMD /app/entry_point.sh
