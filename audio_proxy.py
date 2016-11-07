@@ -5,10 +5,13 @@ import gevent.queue
 import uwsgi
 import socket
 
+
+# ============================================================================
 q = gevent.queue.Queue()
 connected = False
 
 
+# ============================================================================
 def load_tcp():
     global connected
     global q
@@ -21,47 +24,86 @@ def load_tcp():
             last_len = -1
             last_len2 = -1
             min_size = 4000
-            min_packets = 8
+            min_first_packets = 2
+            first_buff = ''
             count = 0
 
             while True:
                 buff = sock.recv(16384)
-                len_ = len(buff)
-                if len_ == last_len and last_len == last_len2 and len_ < min_size:
-                    print('Skipping Silence!')
-                    continue
+                count += 1
 
                 # queue only if connected or first few packets
-                if connected or count < min_packets:
+                if count < min_first_packets:
+                    first_buff += buff
+                elif count == min_first_packets:
+                    first_buff += buff
+                    q.put(first_buff)
+                    first_buff = None
+                elif connected:
+                    len_ = len(buff)
+                    if (min_size > 0 and len_ < min_size and
+                        len_ == last_len and last_len == last_len2):
+                        continue
+
                     q.put(buff)
 
-                last_len2 = last_len
-                last_len = len_
+                    last_len2 = last_len
+                    last_len = len_
+                else:
+                    last_len = last_len2 = 0
 
         except Exception as e:
             print('Stream Error', e)
             gevent.sleep(0.5)
 
 
+# ============================================================================
 def application(env, start_response):
-    # complete the handshake
-    uwsgi.websocket_handshake(env['HTTP_SEC_WEBSOCKET_KEY'], env.get('HTTP_ORIGIN', ''))
+    if 'HTTP_SEC_WEBSOCKET_KEY' in env:
+        handle_ws(env)
+    else:
+        handle_http(env, start_response)
+
+
+# ============================================================================
+def handle_ws(env):
     global connected
     connected = True
-    min_size = 0
 
+    # complete the handshake
+    uwsgi.websocket_handshake(env['HTTP_SEC_WEBSOCKET_KEY'],
+                              env.get('HTTP_ORIGIN', ''))
     print('WS Connected')
 
     try:
-        buff_tot = ''
         while True:
             buff = q.get()
-            buff_tot += buff
-            if len(buff_tot) >= min_size:
-                uwsgi.websocket_send_binary(buff_tot)
-                buff_tot = ''
+            uwsgi.websocket_send_binary(buff)
     except Exception as e:
         print('WS Disconnected', e)
         connected = False
+
+
+# ============================================================================
+def handle_http(env, start_response):
+    start_response('200 OK', [('Content-Type', 'webm/audio; codecs="opus"'),
+                              ('Transfer-Encoding', 'chunked')])
+
+    global connected
+    connected = True
+
+    def stream():
+        while True:
+            buff = q.get()
+            length = len(buff)
+            if not length:
+                continue
+
+            yield b'%X\r\n' % length
+            yield buff
+
+    return stream()
+
+
 
 gevent.spawn(load_tcp)

@@ -7,11 +7,7 @@ x11vnc -storepasswd ${VNC_PASS:-secret} ~/.vnc/passwd
 # start xvfb
 sudo Xvfb $DISPLAY -screen 0 $GEOMETRY -ac +extension RANDR > /dev/null 2>&1 &
 
-# start ffmpeg
-run_browser /app/ffmpeg -re -f pulse -i default -ac 1 -c:a libopus -ab 64k -frame_duration 2.5 -application lowdelay -listen 1 -f webm tcp://0.0.0.0:4720 > /tmp/ffmpeg.log 2>&1 &
-
-# start audio proxy
-uwsgi --http-socket :6082 --gevent 4 --wsgi-file /app/audio_proxy.py &
+/app/audio_stream.sh &
 
 if [[ -n "$PROXY_HOST" ]]; then
     # resolve to ip now, if possible
