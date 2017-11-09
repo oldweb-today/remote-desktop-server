@@ -7,7 +7,7 @@ import socket
 
 
 # ============================================================================
-q = gevent.queue.Queue()
+q = None
 connected = False
 
 
@@ -27,6 +27,7 @@ def load_tcp():
             min_first_packets = 2
             first_buff = ''
             count = 0
+            q = gevent.queue.Queue()
 
             while True:
                 buff = sock.recv(16384)
@@ -67,6 +68,7 @@ def application(env, start_response):
 
 # ============================================================================
 def handle_ws(env):
+    global q
     global connected
     connected = True
 
@@ -77,9 +79,17 @@ def handle_ws(env):
 
     try:
         while True:
-            buff = q.get()
-            uwsgi.websocket_send_binary(buff)
+            try:
+                buff = q.get()
+                uwsgi.websocket_send_binary(buff)
+            except AttributeError:
+                gevent.sleep(0.5)
+                print('Q Init Wait')
+
     except Exception as e:
+        print(e)
+
+    finally:
         print('WS Disconnected', e)
         connected = False
 
