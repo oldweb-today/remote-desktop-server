@@ -21,8 +21,7 @@ RUN apt-get -y update && \
     jwm \
     autocutsel \
     dnsutils \
-    libasound2 \
-    libasound2-plugins \
+    pulseaudio \
     libopus-dev \
     gstreamer1.0
 
