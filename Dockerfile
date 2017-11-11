@@ -21,9 +21,10 @@ RUN apt-get -y update && \
     jwm \
     autocutsel \
     dnsutils \
-    pulseaudio \
+    libasound2 \
+    libasound2-plugins \
     libopus-dev \
-    libmp3lame-dev
+    gstreamer1.0
 
 # sudo
 RUN useradd browser --shell /bin/bash --create-home \
@@ -56,7 +57,7 @@ RUN pip install -U -r requirements.txt
 
 ADD run_browser /usr/bin/run_browser
 
-ADD ffmpeg3.2.tar.gz /app/
+#ADD ffmpeg3.2.tar.gz /app/
 COPY audio_proxy.py /app/audio_proxy.py
 COPY audio_stream.sh /app/audio_stream.sh
 

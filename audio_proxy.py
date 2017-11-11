@@ -7,113 +7,77 @@ import socket
 
 
 # ============================================================================
-q = None
-connected = False
+def application(env, start_response):
+    a = AudioProxy()
+
+    if 'HTTP_SEC_WEBSOCKET_KEY' in env:
+        a.handle_ws(env)
+    else:
+        a.handle_http(env, start_response)
 
 
 # ============================================================================
-def load_tcp():
-    global connected
-    global q
+class AudioProxy(object):
+    def __init__(self):
+        self.q = gevent.queue.Queue()
+        self.connected = True
+        self.tcp_source = ('localhost', 4720)
+        self.buff_size = 16384*4
 
-    while True:
+    def audio_pull(self):
+        while self.connected:
+            try:
+                sock = socket.socket(socket.AF_INET,
+                                     socket.SOCK_STREAM)
+
+                sock.connect(self.tcp_source)
+
+                while self.connected:
+                    buff = sock.recv(self.buff_size)
+                    self.q.put(buff)
+
+            except Exception as e:
+                print('Audio Read Error', e)
+                gevent.sleep(0.3)
+
+    def handle_ws(self, env):
+        gevent.spawn(self.audio_pull)
+
+        # complete the handshake
+        uwsgi.websocket_handshake(env['HTTP_SEC_WEBSOCKET_KEY'],
+                                  env.get('HTTP_ORIGIN', ''))
+        print('WS Connected')
+
         try:
-            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            sock.connect(('localhost', 4720))
-
-            last_len = -1
-            last_len2 = -1
-            min_size = 4000
-            min_first_packets = 2
-            first_buff = ''
-            count = 0
-            q = gevent.queue.Queue()
-
             while True:
-                buff = sock.recv(16384)
-                count += 1
-
-                # queue only if connected or first few packets
-                if count < min_first_packets:
-                    first_buff += buff
-                elif count == min_first_packets:
-                    first_buff += buff
-                    q.put(first_buff)
-                    first_buff = None
-                elif connected:
-                    len_ = len(buff)
-                    if (min_size > 0 and len_ < min_size and
-                        len_ == last_len and last_len == last_len2):
-                        continue
-
-                    q.put(buff)
-
-                    last_len2 = last_len
-                    last_len = len_
-                else:
-                    last_len = last_len2 = 0
+                buff = self.q.get()
+                uwsgi.websocket_send_binary(buff)
 
         except Exception as e:
-            print('Stream Error', e)
-            gevent.sleep(0.5)
+            print(e)
 
+        finally:
+            self.connected = False
+            print('WS Disconnected', e)
 
-# ============================================================================
-def application(env, start_response):
-    if 'HTTP_SEC_WEBSOCKET_KEY' in env:
-        handle_ws(env)
-    else:
-        handle_http(env, start_response)
+    def handle_http(self, env, start_response):
+        start_response('200 OK', [('Content-Type', 'webm/audio; codecs="opus"'),
+                                  ('Transfer-Encoding', 'chunked')])
 
-
-# ============================================================================
-def handle_ws(env):
-    global q
-    global connected
-    connected = True
-
-    # complete the handshake
-    uwsgi.websocket_handshake(env['HTTP_SEC_WEBSOCKET_KEY'],
-                              env.get('HTTP_ORIGIN', ''))
-    print('WS Connected')
-
-    try:
-        while True:
+        def stream():
             try:
-                buff = q.get()
-                uwsgi.websocket_send_binary(buff)
-            except AttributeError:
-                gevent.sleep(0.5)
-                print('Q Init Wait')
+                while True:
+                    buff = self.q.get()
+                    length = len(buff)
+                    if not length:
+                        continue
 
-    except Exception as e:
-        print(e)
+                    yield b'%X\r\n' % length
+                    yield buff
 
-    finally:
-        print('WS Disconnected', e)
-        connected = False
+            finally:
+                self.connected = False
 
-
-# ============================================================================
-def handle_http(env, start_response):
-    start_response('200 OK', [('Content-Type', 'webm/audio; codecs="opus"'),
-                              ('Transfer-Encoding', 'chunked')])
-
-    global connected
-    connected = True
-
-    def stream():
-        while True:
-            buff = q.get()
-            length = len(buff)
-            if not length:
-                continue
-
-            yield b'%X\r\n' % length
-            yield buff
-
-    return stream()
+        return stream()
 
 
-
-gevent.spawn(load_tcp)
