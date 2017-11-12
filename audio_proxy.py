@@ -4,27 +4,46 @@ import gevent.queue
 
 import uwsgi
 import socket
+import subprocess
+
+curr_conn = None
 
 
 # ============================================================================
 def application(env, start_response):
-    a = AudioProxy()
+    global curr_conn
+    if curr_conn:
+        curr_conn.close()
+
+    curr_conn = AudioProxy()
 
     if 'HTTP_SEC_WEBSOCKET_KEY' in env:
-        a.handle_ws(env)
+        curr_conn.handle_ws(env)
     else:
-        a.handle_http(env, start_response)
+        curr_conn.handle_http(env, start_response)
 
 
 # ============================================================================
 class AudioProxy(object):
-    def __init__(self):
-        self.q = gevent.queue.Queue()
-        self.connected = True
-        self.tcp_source = ('localhost', 4720)
-        self.buff_size = 16384*4
+    PORT = 4720
+    AUDIO_CMD = 'gst-launch-1.0 -v alsasrc ! cutter threshold=0.002 ! audioconvert ! audioresample ! opusenc frame-size=2 ! webmmux ! tcpserversink port={0}'
 
-    def audio_pull(self):
+    def __init__(self):
+        self.connected = True
+        self.buff_size = 16384*4
+        self.start_proc()
+
+    def start_proc(self):
+        self.port = AudioProxy.PORT
+        print('Starting Audio Server on Port {0}'.format(self.port))
+        self.tcp_source = ('localhost', self.port)
+
+        args = self.AUDIO_CMD.format(self.port).split(' ')
+        self.proc = subprocess.Popen(args)
+
+        AudioProxy.PORT += 1
+
+    def get_audio_buff(self):
         while self.connected:
             try:
                 sock = socket.socket(socket.AF_INET,
@@ -34,35 +53,43 @@ class AudioProxy(object):
 
                 while self.connected:
                     buff = sock.recv(self.buff_size)
-                    self.q.put(buff)
+                    yield buff
 
             except Exception as e:
                 print('Audio Read Error', e)
+                if self.proc.poll() is not None:
+                    self.start_proc()
+
                 gevent.sleep(0.3)
 
-    def handle_ws(self, env):
-        gevent.spawn(self.audio_pull)
+        yield None
 
+    def handle_ws(self, env):
         # complete the handshake
         uwsgi.websocket_handshake(env['HTTP_SEC_WEBSOCKET_KEY'],
                                   env.get('HTTP_ORIGIN', ''))
         print('WS Connected')
 
         try:
-            while True:
-                buff = self.q.get()
+            for buff in self.get_audio_buff():
+                if not buff:
+                    break
+
                 uwsgi.websocket_send_binary(buff)
 
         except Exception as e:
-            print(e)
+            import traceback
+            traceback.print_exc()
 
         finally:
-            self.connected = False
-            print('WS Disconnected', e)
+            self.close()
+            print('WS Disconnected')
 
     def handle_http(self, env, start_response):
         start_response('200 OK', [('Content-Type', 'webm/audio; codecs="opus"'),
                                   ('Transfer-Encoding', 'chunked')])
+
+        print('HTTP Conn')
 
         def stream():
             try:
@@ -76,8 +103,11 @@ class AudioProxy(object):
                     yield buff
 
             finally:
-                self.connected = False
+                self.close()
 
         return stream()
 
+    def close(self):
+        self.connected = False
+        self.proc.kill()
 
