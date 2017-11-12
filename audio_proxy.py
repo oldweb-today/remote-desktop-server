@@ -26,7 +26,7 @@ def application(env, start_response):
 # ============================================================================
 class AudioProxy(object):
     PORT = 4720
-    AUDIO_CMD = 'gst-launch-1.0 -v alsasrc ! cutter threshold=0.002 ! audioconvert ! audioresample ! opusenc frame-size=2 ! webmmux ! tcpserversink port={0}'
+    AUDIO_CMD = 'gst-launch-1.0 -v alsasrc ! cutter threshold=0.002 ! audioconvert ! audioresample ! opusenc frame-size=2.5 ! webmmux ! tcpserversink port={0}'
 
     def __init__(self):
         self.connected = True
