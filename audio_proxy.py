@@ -13,6 +13,7 @@ curr_conn = None
 def application(env, start_response):
     global curr_conn
     if curr_conn:
+        print('Close Prev')
         curr_conn.close()
 
     curr_conn = AudioProxy()
@@ -20,18 +21,18 @@ def application(env, start_response):
     if 'HTTP_SEC_WEBSOCKET_KEY' in env:
         curr_conn.handle_ws(env)
     else:
-        curr_conn.handle_http(env, start_response)
+        return curr_conn.handle_http(env, start_response)
 
 
 # ============================================================================
 class AudioProxy(object):
     PORT = 4720
-    AUDIO_CMD = 'gst-launch-1.0 -v alsasrc ! cutter threshold=0.002 ! audioconvert ! audioresample ! opusenc frame-size=2.5 ! webmmux ! tcpserversink port={0}'
+    AUDIO_CMD = 'gst-launch-1.0 -v alsasrc ! audio/x-raw, channels=2, rate=24000 ! cutter ! opusenc complexity=0 frame-size=2.5 ! webmmux ! tcpserversink port={0}'
 
     def __init__(self):
         self.connected = True
         self.buff_size = 16384*4
-        self.start_proc()
+        self.proc = None
 
     def start_proc(self):
         self.port = AudioProxy.PORT
@@ -62,13 +63,19 @@ class AudioProxy(object):
 
                 gevent.sleep(0.3)
 
-        yield None
-
     def handle_ws(self, env):
         # complete the handshake
         uwsgi.websocket_handshake(env['HTTP_SEC_WEBSOCKET_KEY'],
                                   env.get('HTTP_ORIGIN', ''))
-        print('WS Connected')
+
+        print('WS Connected: ' + env.get('QUERY_STRING', ''))
+
+        ready = uwsgi.websocket_recv()
+
+        print('Ready, Starting Audio Stream')
+
+        self.start_proc()
+        gevent.sleep(0.3)
 
         try:
             for buff in self.get_audio_buff():
@@ -86,21 +93,38 @@ class AudioProxy(object):
             print('WS Disconnected')
 
     def handle_http(self, env, start_response):
-        start_response('200 OK', [('Content-Type', 'webm/audio; codecs="opus"'),
+        content_type = 'audio/webm; codecs="opus"'
+        start_response('200 OK', [('Content-Type', content_type),
                                   ('Transfer-Encoding', 'chunked')])
 
-        print('HTTP Conn')
+        print('HTTP Connection')
+
+        self.start_proc()
+        gevent.sleep(0.3)
 
         def stream():
+            total_buff = b''
             try:
-                while True:
-                    buff = self.q.get()
-                    length = len(buff)
-                    if not length:
+                for buff in self.get_audio_buff():
+                    if not buff:
+                        break
+
+                    total_buff += buff
+                    length = len(total_buff)
+
+                    if length < 1024:
                         continue
 
                     yield b'%X\r\n' % length
-                    yield buff
+                    yield total_buff
+                    yield b'\r\n'
+                    total_buff = b''
+
+                yield b'0\r\n\r\n'
+
+            except:
+                import traceback
+                traceback.print_exc()
 
             finally:
                 self.close()
@@ -109,5 +133,6 @@ class AudioProxy(object):
 
     def close(self):
         self.connected = False
-        self.proc.kill()
+        if self.proc:
+            self.proc.kill()
 
