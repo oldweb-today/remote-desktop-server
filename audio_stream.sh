@@ -3,23 +3,24 @@
 if [[ "$AUDIO_TYPE" == "opus" ]]; then
     echo "Starting OPUS WS Audio"
 
-    # start ffmpeg
-    #run_browser /app/ffmpeg -re -f pulse -i default -ac 1 -c:a libopus -ab 64k -frame_duration 2.5 -application lowdelay -listen 1 -f webm tcp://0.0.0.0:4720 > /tmp/ffmpeg.log 2>&1 &
-
-    # start gstreamer
-    #gst-launch-1.0 -v alsasrc ! cutter threshold=0.002 ! audioconvert ! audioresample ! opusenc frame-size=2.5 ! webmmux ! tcpserversink port=4720 > /tmp/gstream.log 2>&1 &
-
-    # start audio proxy
+    # opt 1
     uwsgi --http-socket :6082 --gevent 4 --wsgi-file /app/audio_proxy.py &
+
+    # opt 2
+    #gst-launch-1.0 -v alsasrc ! audio/x-raw, channels=2, rate=24000 ! opusenc complexity=0 frame-size=2.5 ! webmmux streamable=true ! tcpserversink port=4720 &
+
     #sleep 2
+
     #websockify 6082 localhost:4720 &
-    #websockify 6082 -- gst-launch-1.0 -v alsasrc ! cutter threshold=0.002 ! audioconvert ! audioresample ! opusenc frame-size=2.5 ! webmmux ! tcpserversink port=4720 > /tmp/gstream.log
 
-elif [[ "$AUDIO_TYPE" == "raw" ]]; then
-    echo "Starting PCM WS Audio"
+    # opt 3
+    #websockify 6082 -- gst-launch-1.0 -v alsasrc ! audio/x-raw, channels=2, rate=24000 ! opusenc complexity=0 frame-size=2.5 ! webmmux streamable=true ! tcpserversink port=6082 &
 
-    run_browser /app/ffmpeg -re -f pulse -i default -ac 1 -ab 64k -ar 44100 -listen 1 -f u8 tcp://0.0.0.0:4720 > /tmp/ffmpeg.log 2>&1 &
 
-    uwsgi --http-socket :6082 --gevent 4 --wsgi-file /app/audio_proxy.py &
+elif [[ "$AUDIO_TYPE" == "mp3" ]]; then
+    echo "Starting MP3 WS Audio"
+
+    websockify 6082 -- gst-launch-1.0 -v alsasrc ! audio/x-raw, channels=2, rate=24000 ! lamemp3enc target=bitrate cbr=true bitrate=192 ! tcpserversink port=6082 &
+
 fi
 

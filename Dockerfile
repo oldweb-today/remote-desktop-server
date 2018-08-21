@@ -56,9 +56,9 @@ RUN pip install -U -r requirements.txt
 
 ADD run_browser /usr/bin/run_browser
 
-#ADD ffmpeg3.2.tar.gz /app/
 COPY audio_proxy.py /app/audio_proxy.py
 COPY audio_stream.sh /app/audio_stream.sh
+COPY rebind.so /usr/local/lib/rebind.so
 
 COPY entry_point.sh /app/entry_point.sh
 
@@ -74,7 +74,7 @@ ENV SCREEN_DEPTH 16
 ENV DISPLAY :99
 
 ENV PROXY_PORT 8080
-ENV PROXY_GET_CA http://mitm.it/cert/pem
+ENV PROXY_GET_CA http://wsgiprox/download/pem
 ENV IDLE_TIMEOUT ""
 ENV AUDIO_TYPE ""
 
