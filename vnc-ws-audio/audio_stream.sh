@@ -1,5 +1,7 @@
 #!/bin/bash
 
+pulseaudio -D
+
 if [[ "$AUDIO_TYPE" == "opus" ]]; then
     echo "Starting OPUS WS Audio"
 

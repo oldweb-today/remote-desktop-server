@@ -1,0 +1,28 @@
+version: '3'
+
+# Build All Base Images
+services:
+    base-root:
+        image: oldwebtoday/base-root
+        build: ../base-root
+
+    base-browser:
+        image: oldwebtoday/base-browser
+        build: ../base-browser
+        depends_on:
+            - base-root
+
+    base-displayaudio:
+        image: oldwebtoday/base-displayaudio
+        build: ../base-displayaudio
+        depends_on:
+            - base-root
+
+    # VNC + WS AUDIO
+    vnc-ws-audio:
+        image: oldwebtoday/vnc-ws-audio
+        build: ../vnc-ws-audio
+        depends_on:
+            - base-displayaudio
+
+
