@@ -1,4 +1,14 @@
-FROM oldwebtoday/base-root
+FROM ubuntu:bionic
+
+# fonts
+RUN DEBIAN_FRONTEND=noninteractive apt-get -y update && \
+    DEBIAN_FRONTEND=noninteractive apt-get -qqy --no-install-recommends install \
+    fonts-liberation \
+    fonts-dejavu \
+    fonts-arphic-ukai fonts-arphic-uming fonts-ipafont-mincho fonts-ipafont-gothic fonts-unfonts-core \
+    fonts-indic \
+    fonts-noto-color-emoji
+
 
 # basic
 RUN DEBIAN_FRONTEND=noninteractive apt-get -y update && \
@@ -12,13 +22,20 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get -y update && \
     net-tools \
     libnss3-tools \
     curl \
-    socat
+    socat \
+    wget \
+    pulseaudio \
+    dbus-x11 \
+    ca-certificates \
+    bzip2
 
 ## sudo
 RUN useradd browser --shell /bin/bash --create-home \
   && usermod -a -G sudo browser \
   && echo 'ALL ALL = (ALL) NOPASSWD: ALL' >> /etc/sudoers \
   && echo 'browser:secret' | chpasswd
+
+
 
 WORKDIR app
 

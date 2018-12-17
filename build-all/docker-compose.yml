@@ -2,21 +2,15 @@ version: '3'
 
 # Build All Base Images
 services:
-    base-root:
-        image: oldwebtoday/base-root
-        build: ../base-root
-
+    # Base for all browsers
     base-browser:
         image: oldwebtoday/base-browser
         build: ../base-browser
-        depends_on:
-            - base-root
 
+    # Base for display + audio transport
     base-displayaudio:
         image: oldwebtoday/base-displayaudio
         build: ../base-displayaudio
-        depends_on:
-            - base-root
 
     # VNC + WS AUDIO
     vnc-ws-audio:
