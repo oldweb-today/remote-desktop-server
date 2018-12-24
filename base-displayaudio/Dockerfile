@@ -31,8 +31,11 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get install -y \
   libshout3-dev \
   libpulse-dev \
   libopus-dev \
-  libgirepository1.0-dev
-
+  libgirepository1.0-dev \
+  libnice-dev \
+  libsrtp2-dev \
+  libvpx-dev \
+  gtk-doc-tools
 
 ARG GST_VERSION=1.14.4
 
@@ -75,6 +78,14 @@ make install && \
 cd .. && \
 rm -rvf /gst-plugins-base
 
+# libnice
+RUN git clone https://github.com/libnice/libnice.git \
+&& cd libnice \
+&& ./autogen.sh --prefix=/usr --with-gstreamer --enable-static --enable-static-plugins --enable-shared --without-gstreamer-0.10 --disable-gtk-doc --enable-compile-warnings=no \
+&& make install && \
+cd .. && \
+rm -rvf /libnic
+
 # Fetch and build gst-plugins-good
 RUN git clone -b $GST_VERSION --depth 1 git://anongit.freedesktop.org/git/gstreamer/gst-plugins-good && \
 cd gst-plugins-good && \
@@ -95,8 +106,8 @@ git checkout $GST_VERSION && \
 --disable-isomp4 \
 #--disable-matroska \
 --disable-monoscope \
---disable-rtp \
---disable-rtpmanager \
+#--disable-rtp \
+#--disable-rtpmanager \
 --disable-rtsp \
 --disable-shapewipe \
 --disable-smpte \
@@ -126,7 +137,8 @@ git checkout $GST_VERSION && \
 --disable-libdv \
 --disable-libpng \
 --disable-dv1394 \
---disable-vpx && \
+#--disable-vpx 
+&& \
 make -j`nproc` && \
 make install && \
 cd .. && \
@@ -233,8 +245,8 @@ git checkout $GST_VERSION && \
 --disable-lv2 \
 --disable-libde265 \
 --disable-libmms \
---disable-srtp \
---disable-dtls \
+#--disable-srtp \
+#--disable-dtls \
 --disable-ttml \
 --disable-modplug \
 --disable-mpeg2enc \
