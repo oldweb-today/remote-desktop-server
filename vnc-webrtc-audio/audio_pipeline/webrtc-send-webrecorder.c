@@ -613,7 +613,7 @@ check_plugins (void)
   GstPlugin *plugin;
   GstRegistry *registry;
   const gchar *needed[] = { "opus", "vpx", "nice", "webrtc", "dtls", "srtp",
-      "rtpmanager", "videotestsrc", "audiotestsrc", NULL};
+      "rtpmanager", NULL};
 
   registry = gst_registry_get ();
   ret = TRUE;
