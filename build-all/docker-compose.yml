@@ -19,4 +19,10 @@ services:
         depends_on:
             - base-displayaudio
 
+    # VNC + WetRTC AUDIO
+    vnc-webrtc-audio:
+        image: oldwebtoday/vnc-webrtc-audio
+        build: ../vnc-webrtc-audio
+        depends_on:
+        - base-displayaudio
 
