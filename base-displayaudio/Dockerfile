@@ -1,8 +1,7 @@
 FROM ubuntu:bionic
 
-RUN apt-get -y update
-
 # Adapted from https://github.com/radiokit/docker-gstreamer/blob/master/Dockerfile
+RUN apt-get -y update
 
 # Install compiler etc.
 RUN DEBIAN_FRONTEND=noninteractive apt-get install -y \
@@ -17,7 +16,8 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get install -y \
   git-core \
   build-essential \
   gettext \
-  pulseaudio
+  pulseaudio \
+  gtk-doc-tools
 
 # Install dependencies necessary to build our custom GStreamer build
 RUN DEBIAN_FRONTEND=noninteractive apt-get install -y \
@@ -32,17 +32,23 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get install -y \
   libpulse-dev \
   libopus-dev \
   libgirepository1.0-dev \
-  libnice-dev \
   libsrtp2-dev \
   libvpx-dev \
-  gtk-doc-tools
+  libx11-dev \
+  libxv-dev \
+  libxt-dev \
+  #libx264-dev \
+  libgnutls28-dev \
+  python-gi-dev \
+  python-dev
 
-ARG GST_VERSION=1.14.4
+
+ARG GIT_BRANCH=master
 
 # Fetch and build GStreamer
-RUN git clone -b $GST_VERSION --depth 1 git://anongit.freedesktop.org/git/gstreamer/gstreamer && \
+RUN git clone -b $GIT_BRANCH --depth 1 git://anongit.freedesktop.org/git/gstreamer/gstreamer && \
 cd gstreamer && \
-git checkout $GST_VERSION && \
+git checkout $GIT_BRANCH && \
 ./autogen.sh --prefix=/usr --disable-gtk-doc && \
 make -j`nproc` && \
 make install && \
@@ -50,21 +56,21 @@ cd .. && \
 rm -rvf /gstreamer
 
 # Fetch and build gst-plugins-base
-RUN git clone -b $GST_VERSION --depth 1 git://anongit.freedesktop.org/git/gstreamer/gst-plugins-base && \
+RUN git clone -b $GIT_BRANCH --depth 1 git://anongit.freedesktop.org/git/gstreamer/gst-plugins-base && \
 cd gst-plugins-base && \
-git checkout $GST_VERSION && \
+git checkout $GIT_BRANCH && \
 ./autogen.sh --prefix=/usr \
 --disable-gtk-doc \
 --disable-adder \
 --disable-app \
---disable-videoconvert \
+#--disable-videoconvert \
 --disable-gio \
 --disable-subparse \
 #--disable-tcp \
---disable-videotestsrc \
+#--disable-videotestsrc \
 --disable-videorate \
 --disable-videoscale \
---disable-x \
+#--disable-x \
 --disable-xvideo \
 --disable-xshm \
 --disable-alsa \
@@ -78,18 +84,23 @@ make install && \
 cd .. && \
 rm -rvf /gst-plugins-base
 
+
 # libnice
-RUN git clone https://github.com/libnice/libnice.git \
+ARG LIB_NICE_VERSION=0.1.15
+
+RUN git clone -b $LIB_NICE_VERSION git://anongit.freedesktop.org/libnice/libnice \
 && cd libnice \
+&& git checkout $LIB_NICE_VERSION \
 && ./autogen.sh --prefix=/usr --with-gstreamer --enable-static --enable-static-plugins --enable-shared --without-gstreamer-0.10 --disable-gtk-doc --enable-compile-warnings=no \
 && make install && \
 cd .. && \
-rm -rvf /libnic
+rm -rvf /libnice
+
 
 # Fetch and build gst-plugins-good
-RUN git clone -b $GST_VERSION --depth 1 git://anongit.freedesktop.org/git/gstreamer/gst-plugins-good && \
+RUN git clone -b $GIT_BRANCH --depth 1 git://anongit.freedesktop.org/git/gstreamer/gst-plugins-good && \
 cd gst-plugins-good && \
-git checkout $GST_VERSION && \
+git checkout $GIT_BRANCH && \
 ./autogen.sh --prefix=/usr \
 --disable-gtk-doc \
 --disable-alpha \
@@ -125,7 +136,7 @@ git checkout $GST_VERSION && \
 --disable-osx_audio \
 --disable-osx_video \
 --disable-gst_v4l2 \
---disable-x \
+#--disable-x \
 --disable-aalib \
 --disable-aalibtest \
 --disable-cairo \
@@ -145,9 +156,12 @@ cd .. && \
 rm -rvf /gst-plugins-good
 
 # Fetch and build gst-plugins-bad
-RUN git clone -b $GST_VERSION --depth 1 git://anongit.freedesktop.org/git/gstreamer/gst-plugins-bad && \
+#RUN git clone -b $GIT_BRANCH --depth 1 git://anongit.freedesktop.org/git/gstreamer/gst-plugins-bad && \
+#cd gst-plugins-bad && \
+#git checkout $GIT_BRANCH && \
+RUN git clone -b webrtc-port-range --depth 1 https://gitlab.freedesktop.org/ikreymer/gst-plugins-bad.git && \
 cd gst-plugins-bad && \
-git checkout $GST_VERSION && \
+git checkout webrtc-port-range && \
 ./autogen.sh --prefix=/usr \
 --disable-gtk-doc \
 --disable-accurip \
@@ -287,12 +301,13 @@ git checkout $GST_VERSION && \
 make -j`nproc` && \
 make install && \
 cd .. && \
-rm -rvf /gst-plugins-bad
+rm -rvf /gst-plugins-bad && echo ""
+
 
 # Fetch and build gst-plugins-ugly
-RUN git clone -b $GST_VERSION --depth 1 git://anongit.freedesktop.org/git/gstreamer/gst-plugins-ugly && \
+RUN git clone -b $GIT_BRANCH --depth 1 git://anongit.freedesktop.org/git/gstreamer/gst-plugins-ugly && \
 cd gst-plugins-ugly && \
-git checkout $GST_VERSION && \
+git checkout $GIT_BRANCH && \
 ./autogen.sh --prefix=/usr \
 --disable-gtk-doc \
 --disable-asfdemux \
@@ -306,20 +321,22 @@ git checkout $GST_VERSION && \
 --disable-cdio \
 --disable-dvdread \
 --disable-sidplay \
---disable-x264 && \
+--disable-x264 \
+&& \
 make -j`nproc` && \
 make install && \
 cd .. && \
 rm -rvf /gst-plugins-ugly
 
-RUN apt-get update && apt-get install -qyy python-gi-dev python-dev
+
+ARG GST_PY_VERSION=1.14
 
 # install gst-python
-RUN git clone -b $GST_VERSION --depth 1 git://anongit.freedesktop.org/git/gstreamer/gst-python && \
+RUN git clone -b $GST_PY_VERSION --depth 1 git://anongit.freedesktop.org/git/gstreamer/gst-python && \
 cd gst-python && \
-git checkout $GST_VERSION && \
+git checkout $GST_PY_VERSION && \
 ./autogen.sh --prefix=/usr && \
-make && \
+make -j`nproc` && \
 make install && \
 cd .. && \
 rm -rvf /gst-python
