@@ -2,7 +2,7 @@ FROM oldwebtoday/vnc-ws-audio
 
 WORKDIR /app/
 
-COPY app /app/
+COPY . /app/
 
 CMD /app/run.sh
 
