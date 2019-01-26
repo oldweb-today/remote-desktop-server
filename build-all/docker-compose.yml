@@ -19,5 +19,5 @@ services:
         image: oldwebtoday/vnc-webrtc-audio
         build: ../vnc-webrtc-audio
         depends_on:
-        - base-displayaudio
+            - vnc-ws-audio
 

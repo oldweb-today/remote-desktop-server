@@ -18,32 +18,10 @@ if [[ -n "$IDLE_TIMEOUT" ]]; then
     TIMEOUT_PARAM="--idle-timeout $IDLE_TIMEOUT"
 fi
 
-function shutdown {
-  kill -s SIGTERM $NODE_PID
-  wait $NODE_PID
-}
-
-# disable any terms
-#sudo chmod a-x /usr/bin/*term
-#sudo chmod a-x /bin/*term
 
 
 # run websockify
-websockify $TIMEOUT_PARAM 6080 localhost:5900 > /dev/null 2>&1 &
+websockify $TIMEOUT_PARAM 6080 localhost:5900 > /dev/null 2>&1
 
-NODE_PID=$!
 
-trap shutdown SIGTERM SIGINT
-for i in $(seq 1 10)
-do
-  xdpyinfo -display $DISPLAY >/dev/null 2>&1
-  if [ $? -eq 0 ]; then
-    break
-  fi
-  echo Waiting xvfb...
-  sleep 0.5
-done
 
-echo "Xvfb running"
-
-wait $NODE_PID
