@@ -6,6 +6,8 @@ import os
 import sys
 import json
 import argparse
+import logging
+from concurrent.futures._base import TimeoutError
 
 import gi
 gi.require_version('Gst', '1.0')
@@ -16,6 +18,7 @@ gi.require_version('GstSdp', '1.0')
 from gi.repository import GstSdp
 
 
+# ============================================================================
 RTP_PORT = int(os.environ.get('RTP_PORT', '10235'))
 
 
@@ -41,30 +44,21 @@ else:
     PIPELINE = AUDIO_PIPELINE
 
 
-
-class WebRTCClient:
-    def __init__(self, id_, peer_id, server):
-        self.id_ = id_
-        self.conn = None
+# ============================================================================
+class WebRTCHandler:
+    def __init__(self, ws, keepalive_timeout=30):
+        self.ws = ws
         self.pipe = None
         self.webrtc = None
-        self.peer_id = str(peer_id)
-        self.server = server
-
-    async def connect(self):
-        #sslctx = ssl.create_default_context(purpose=ssl.Purpose.CLIENT_AUTH)
-        self.conn = await websockets.connect(self.server)
-        await self.conn.send('HELLO %d' % our_id)
-
-    async def setup_call(self):
-        await self.conn.send('SESSION {}'.format(self.peer_id))
+        self.keepalive_timeout = keepalive_timeout
 
     def send_sdp_offer(self, offer):
         text = offer.sdp.as_text()
-        print ('Sending offer:\n%s' % text)
+        print('Sending offer:\n%s' % text)
         msg = json.dumps({'sdp': {'type': 'offer', 'sdp': text}})
+
         loop = asyncio.new_event_loop()
-        loop.run_until_complete(self.conn.send(msg))
+        loop.run_until_complete(self.ws.send(msg))
 
     def on_offer_created(self, promise, _, __):
         promise.wait()
@@ -90,14 +84,16 @@ class WebRTCClient:
             return
 
         icemsg = json.dumps({'ice': {'candidate': candidate, 'sdpMLineIndex': mlineindex}})
+
         loop = asyncio.new_event_loop()
-        loop.run_until_complete(self.conn.send(icemsg))
+        loop.run_until_complete(self.ws.send(icemsg))
 
     def start_pipeline(self):
         self.pipe = Gst.parse_launch(PIPELINE)
         self.webrtc = self.pipe.get_by_name('sendrecv')
         self.webrtc.connect('on-negotiation-needed', self.on_negotiation_needed)
         self.webrtc.connect('on-ice-candidate', self.send_ice_candidate_message)
+        #self.webrtc.connect('notify::ice-connection-state', self.on_conn_changed)
         self.pipe.set_state(Gst.State.PLAYING)
 
     async def handle_sdp(self, message):
@@ -107,7 +103,7 @@ class WebRTCClient:
             sdp = msg['sdp']
             assert(sdp['type'] == 'answer')
             sdp = sdp['sdp']
-            print ('Received answer:\n%s' % sdp)
+            print('Received answer:\n%s' % sdp)
             res, sdpmsg = GstSdp.SDPMessage.new()
             GstSdp.sdp_message_parse_buffer(bytes(sdp.encode()), sdpmsg)
             answer = GstWebRTC.WebRTCSessionDescription.new(GstWebRTC.WebRTCSDPType.ANSWER, sdpmsg)
@@ -121,41 +117,113 @@ class WebRTCClient:
             self.webrtc.emit('add-ice-candidate', sdpmlineindex, candidate)
 
     async def loop(self):
-        assert self.conn
-        async for message in self.conn:
-            if message == 'HELLO':
-                await self.setup_call()
-            elif message == 'SESSION_OK':
+        assert self.ws
+        while True:
+            message = await self.recv_msg_ping()
+            if message.startswith('HELLO'):
                 self.start_pipeline()
+
+                await self.ws.send('HELLO')
+
             elif message.startswith('ERROR'):
-                print (message)
+                print(message)
                 return 1
             else:
                 await self.handle_sdp(message)
+
         return 0
 
+    async def recv_msg_ping(self):
+        '''
+        Wait for a message forever, and send a regular ping to prevent bad routers
+        from closing the connection.
+        '''
+        msg = None
+        while msg is None:
+            try:
+                msg = await asyncio.wait_for(self.ws.recv(), self.keepalive_timeout)
+                #msg = await self.ws.recv()
+            except TimeoutError:
+                print('Signaling: Send Keep-Alive Ping')
+                await self.ws.ping()
 
-def check_plugins():
-    needed = ["opus", "vpx", "nice", "webrtc", "dtls", "srtp", "rtp",
-              "rtpmanager"]
+        return msg
 
-    missing = list(filter(lambda p: Gst.Registry.get().find_plugin(p) is None, needed))
-    if len(missing):
-        print('Missing gstreamer plugins:', missing)
-        return False
-    return True
+    def disconnect(self):
+        if self.ws and self.ws.open:
+            # Don't care about errors
+            asyncio.ensure_future(self.ws.close(reason='hangup'))
 
+        if self.pipe:
+            self.pipe.set_state(Gst.State.NULL)
+
+
+# ============================================================================
+class WebRTCServer():
+    def __init__(self):
+        self.curr = None
+        self.keepalive_timeout = 30
+
+    async def handler_loop(self, ws, path=None):
+        '''
+        All incoming messages are handled here. @path is unused.
+        '''
+        if self.curr:
+            print('Pipeline Already Running?')
+
+        handler = WebRTCHandler(ws, self.keepalive_timeout)
+        self.curr = handler
+
+        try:
+            await handler.loop()
+        except websockets.ConnectionClosed:
+            print('Client Disconnected')
+
+        finally:
+            print('Closing Connection')
+            handler.disconnect()
+
+    def run_server(self, server_addr, keepalive_timeout):
+        print("Signaling: Listening on https://{}:{}".format(*server_addr))
+
+        self.keepalive_timeout = keepalive_timeout
+
+        wsd = websockets.serve(self.handler_loop, *server_addr, max_queue=4)
+
+        logger = logging.getLogger('websockets.server')
+
+        logger.setLevel(logging.ERROR)
+        logger.addHandler(logging.StreamHandler())
+
+        asyncio.get_event_loop().run_until_complete(wsd)
+        asyncio.get_event_loop().run_forever()
+
+    def check_plugins(self):
+        needed = ["opus", "vpx", "nice", "webrtc", "dtls",
+                  "srtp", "rtp", "rtpmanager"]
+
+        missing = list(filter(lambda p: Gst.Registry.get().find_plugin(p) is None, needed))
+        if len(missing):
+            print('Missing gstreamer plugins:', missing)
+            return False
+        return True
+
+
+    def init_cli(self):
+        Gst.init(None)
+        if not self.check_plugins():
+            sys.exit(1)
+
+        parser = argparse.ArgumentParser()
+        parser.add_argument('--addr', default='0.0.0.0', help='Address to listen on')
+        parser.add_argument('--port', default=80, type=int, help='Port to listen on')
+        parser.add_argument('--keepalive-timeout', dest='keepalive_timeout', default=30, type=int, help='Timeout for keepalive (in seconds)')
+
+        args = parser.parse_args()
+
+        self.run_server((args.addr, args.port), args.keepalive_timeout)
 
 if __name__=='__main__':
-    Gst.init(None)
-    if not check_plugins():
-        sys.exit(1)
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--peer-id', help='String ID of the peer to connect to')
-    parser.add_argument('--server', help='Signalling server to connect to, eg "wss://127.0.0.1:8443"')
-    args = parser.parse_args()
-    our_id = random.randrange(10, 10000)
-    c = WebRTCClient(our_id, args.peer_id, args.server)
-    asyncio.get_event_loop().run_until_complete(c.connect())
-    res = asyncio.get_event_loop().run_until_complete(c.loop())
-    sys.exit(res)
+    WebRTCServer().init_cli()
+
+

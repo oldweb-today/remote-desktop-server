@@ -12,8 +12,8 @@ function run_forever() {
 echo "##### Start PulseAudio"
 pulseaudio -D
 
-echo "###### Start signaling server"
-run_forever python3 -u /app/signaling-server.py --port 6082 &
+#echo "###### Start signaling server"
+#run_forever python3 -u /app/signaling-server.py --port 6082 &
 
 echo "##### Start WebRTC Audio pipeline"
 
@@ -28,6 +28,5 @@ if [ -n "${WEBRTC_TURN_SERVER}" ]; then
 fi
 
 #run_forever /app/webrtc-send-webrecorder --signaling-server ws://localhost:6082 --peer-id 1 ${OTHER_ARGS} &
-run_forever python3 -u /app/webrtc-sendrecv.py --server ws://localhost:6082 --peer-id 1 &
-
+run_forever python3 -u /app/webrtc.py --port 6082
 
