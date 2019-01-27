@@ -183,17 +183,20 @@ class WebRTCServer():
             print('Closing Connection')
             handler.disconnect()
 
+        print('Exiting')
+        sys.exit(0)
+
     def run_server(self, server_addr, keepalive_timeout):
         print("Signaling: Listening on https://{}:{}".format(*server_addr))
 
         self.keepalive_timeout = keepalive_timeout
 
-        wsd = websockets.serve(self.handler_loop, *server_addr, max_queue=4)
-
         logger = logging.getLogger('websockets.server')
 
         logger.setLevel(logging.ERROR)
         logger.addHandler(logging.StreamHandler())
+
+        wsd = websockets.serve(self.handler_loop, *server_addr, max_queue=4)
 
         asyncio.get_event_loop().run_until_complete(wsd)
         asyncio.get_event_loop().run_forever()
