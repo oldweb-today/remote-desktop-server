@@ -4,13 +4,9 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get -y update && \
     DEBIAN_FRONTEND=noninteractive apt-get -qqy --no-install-recommends install \
     x11vnc \
     xvfb \
-    sudo
-
-RUN DEBIAN_FRONTEND=noninteractive apt-get -y update && \
-    DEBIAN_FRONTEND=noninteractive apt-get -qqy --no-install-recommends install \
+    sudo \
     python3-pip
  
-  
 WORKDIR /app/
 
 COPY requirements.txt /app/
