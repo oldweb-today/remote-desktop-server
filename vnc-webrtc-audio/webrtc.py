@@ -24,10 +24,10 @@ RTP_PORT = int(os.environ.get('RTP_PORT', '10235'))
 
 AUDIO_VIDEO_PIPELINE = '''
  webrtcbin name=sendrecv bundle-policy=max-bundle min-rtp-port={0} max-rtp-port={0} min-rtcp-port={1} max-rtcp-port={1}
- ximagesrc ! video/x-raw ! videoconvert ! queue ! vp8enc deadline=1 buffer-size=100 keyframe-max-dist=30 cpu-used=5 ! rtpvp8pay !
- queue ! application/x-rtp,media=video,encoding-name=VP8,payload=97 ! sendrecv.
- pulsesrc buffer-time=128000 latency-time=32000  ! audioconvert ! queue ! opusenc frame-size=2.5 ! rtpopuspay !
- queue ! application/x-rtp,media=audio,encoding-name=OPUS,payload=96 ! sendrecv.
+ ximagesrc ! video/x-raw ! videoconvert ! queue max-size-time=50 ! vp8enc deadline=1 buffer-size=100 buffer-initial-size=100 buffer-optimal-size=100 keyframe-max-dist=30 cpu-used=5 ! rtpvp8pay !
+ queue max-size-time=200 ! application/x-rtp,media=video,encoding-name=VP8,payload=97! identity silent=false ! sendrecv.
+ pulsesrc! audioconvert ! opusenc frame-size=2.5 ! rtpopuspay !
+ queue max-size-time=200 min-threshold-time=200000000 max-size-time=220000000 ! application/x-rtp,media=audio,encoding-name=OPUS,payload=96! identity silent=false ! sendrecv.
 '''.format(RTP_PORT, RTP_PORT + 3)
 
 
