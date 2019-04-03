@@ -7,7 +7,6 @@ import sys
 import json
 import argparse
 import logging
-import time
 from concurrent.futures._base import TimeoutError
 
 import gi
@@ -32,7 +31,7 @@ H264_PIPELINE = "ximagesrc show-pointer=false ! videoconvert ! queue ! x264enc t
 AUDIO_WEBRTC_PIPELINE = '''
  webrtcbin name=sendrecv bundle-policy=max-bundle min-rtp-port={0} max-rtp-port={0} min-rtcp-port={1} max-rtcp-port={1}
  pulsesrc buffer-time=128000 latency-time=32000  ! audioconvert ! queue ! opusenc frame-size=2.5 ! rtpopuspay !
- queue ! application/x-rtp,media=audio,encoding-name=OPUS,payload=97 ! sendonly.
+ queue ! application/x-rtp,media=audio,encoding-name=OPUS,payload=97 ! sendrecv.
 '''.format(RTP_PORT, RTP_PORT + 3)
 
 
@@ -89,9 +88,9 @@ class WebRTCHandler:
             audio = Gst.parse_bin_from_description(AUDIO_PIPELINE, True)
 
             webrtc = Gst.ElementFactory.make("webrtcbin", "sendrecv")
-
-            #webrtc.set_property('turn-server', "turn://1556469853_client46:hIb16HamWB5x1i9wokD2XxzSlqo=@h2.nfbonf.nfb.ca")
-            #webrtc.set_property("stun-server", "stun://stun.l.google.com:19302");
+            #webrtc.set_property("name", "sendonly");
+            webrtc.set_property('turn-server', "turn://1556469853_client46:hIb16HamWB5x1i9wokD2XxzSlqo=@h2.nfbonf.nfb.ca")
+            webrtc.set_property("stun-server", "stun://stun.l.google.com:19302");
             webrtc.set_property("bundle-policy", "max-bundle");
 
             pipe = Gst.Pipeline.new('main')
@@ -141,7 +140,6 @@ class WebRTCHandler:
             message = await self.recv_msg_ping()
             if message.startswith('HELLO'):
                 self.start_pipeline()
-                #time.sleep(2)
 
                 await self.ws.send('HELLO')
 
