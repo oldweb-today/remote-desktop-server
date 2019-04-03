@@ -7,6 +7,7 @@ import sys
 import json
 import argparse
 import logging
+import time
 from concurrent.futures._base import TimeoutError
 
 import gi
@@ -21,27 +22,21 @@ from gi.repository import GstSdp
 # ============================================================================
 RTP_PORT = int(os.environ.get('RTP_PORT', '10235'))
 
+AUDIO_PIPELINE = "pulsesrc ! audioconvert ! opusenc ! rtpopuspay ! queue max-size-time=200 min-threshold-time=200000000 max-size-time=220000000  ! capsfilter caps=application/x-rtp,media=audio,encoding-name=OPUS,payload=96"
 
-AUDIO_VIDEO_PIPELINE = '''
- webrtcbin name=sendrecv bundle-policy=max-bundle min-rtp-port={0} max-rtp-port={0} min-rtcp-port={1} max-rtcp-port={1}
- ximagesrc ! video/x-raw ! videoconvert ! queue max-size-time=50 ! vp8enc deadline=1 buffer-size=100 buffer-initial-size=100 buffer-optimal-size=100 keyframe-max-dist=30 cpu-used=5 ! rtpvp8pay !
- queue max-size-time=200 ! application/x-rtp,media=video,encoding-name=VP8,payload=97! identity silent=false ! sendrecv.
- pulsesrc! audioconvert ! opusenc frame-size=2.5 ! rtpopuspay !
- queue max-size-time=200 min-threshold-time=200000000 max-size-time=220000000 ! application/x-rtp,media=audio,encoding-name=OPUS,payload=96! identity silent=false ! sendrecv.
-'''.format(RTP_PORT, RTP_PORT + 3)
+VP8_PIPELINE = "ximagesrc show-pointer=false ! videoconvert ! queue ! vp8enc deadline=1  buffer-size=100 buffer-initial-size=100 buffer-optimal-size=100 keyframe-max-dist=30 cpu-used=5  ! rtpvp8pay ! queue ! capsfilter caps=application/x-rtp,media=video,encoding-name=VP8,payload=97"
+H264_PIPELINE = "ximagesrc show-pointer=false ! videoconvert ! queue ! x264enc tune=0x00000004 key-int-max=30 ! video/x-h264,profile=constrained-baseline,packetization-mode=1 ! rtph264pay ! queue max-size-time=50 ! capsfilter caps=application/x-rtp,media=video,encoding-name=H264,payload=97"
 
 
-AUDIO_PIPELINE = '''
+
+AUDIO_WEBRTC_PIPELINE = '''
  webrtcbin name=sendrecv bundle-policy=max-bundle min-rtp-port={0} max-rtp-port={0} min-rtcp-port={1} max-rtcp-port={1}
  pulsesrc buffer-time=128000 latency-time=32000  ! audioconvert ! queue ! opusenc frame-size=2.5 ! rtpopuspay !
- queue ! application/x-rtp,media=audio,encoding-name=OPUS,payload=97 ! sendrecv.
+ queue ! application/x-rtp,media=audio,encoding-name=OPUS,payload=97 ! sendonly.
 '''.format(RTP_PORT, RTP_PORT + 3)
 
 
-if os.environ.get('WEBRTC_VIDEO'):
-    PIPELINE = AUDIO_VIDEO_PIPELINE
-else:
-    PIPELINE = AUDIO_PIPELINE
+
 
 
 # ============================================================================
@@ -89,7 +84,31 @@ class WebRTCHandler:
         loop.run_until_complete(self.ws.send(icemsg))
 
     def start_pipeline(self):
-        self.pipe = Gst.parse_launch(PIPELINE)
+        if os.environ.get('WEBRTC_VIDEO'):
+            video = Gst.parse_bin_from_description(VP8_PIPELINE, True)
+            audio = Gst.parse_bin_from_description(AUDIO_PIPELINE, True)
+
+            webrtc = Gst.ElementFactory.make("webrtcbin", "sendrecv")
+
+            #webrtc.set_property('turn-server', "turn://1556469853_client46:hIb16HamWB5x1i9wokD2XxzSlqo=@h2.nfbonf.nfb.ca")
+            #webrtc.set_property("stun-server", "stun://stun.l.google.com:19302");
+            webrtc.set_property("bundle-policy", "max-bundle");
+
+            pipe = Gst.Pipeline.new('main')
+
+            pipe.add(video)
+            pipe.add(audio)
+            pipe.add(webrtc)
+
+            video.link(webrtc)
+            audio.link(webrtc)
+
+            self.pipe = pipe
+        else:
+            self.pipe = Gst.parse_launch(AUDIO_WEBRTC_PIPELINE)
+
+
+        #self.pipe = Gst.parse_launch(PIPELINE)
         self.webrtc = self.pipe.get_by_name('sendrecv')
         self.webrtc.connect('on-negotiation-needed', self.on_negotiation_needed)
         self.webrtc.connect('on-ice-candidate', self.send_ice_candidate_message)
@@ -122,6 +141,7 @@ class WebRTCHandler:
             message = await self.recv_msg_ping()
             if message.startswith('HELLO'):
                 self.start_pipeline()
+                #time.sleep(2)
 
                 await self.ws.send('HELLO')
 

@@ -37,14 +37,23 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get install -y \
   libx11-dev \
   libxv-dev \
   libxt-dev \
-  #libx264-dev \
+  libx264-dev \
   libgnutls28-dev \
   python-gi-dev \
-  python-dev
+  python-dev \
+  libxfixes-dev
 
 
-ARG GIT_BRANCH=master
+# vp8 + opus = ok, h264 + opus = ok
+#ARG GST_PY_VERSION=1.14.4
+#ARG GIT_BRANCH=1.14.4
+#ARG LIB_NICE_VERSION=0.1.15
 
+# vp8 + audio = ok, h264 + audio = ko (empty audio)
+ARG GIT_BRANCH=1.15.2
+ARG GST_PY_VERSION=1.15.2
+ARG LIB_NICE_VERSION=0.1.15
+#
 # Fetch and build GStreamer
 RUN git clone -b $GIT_BRANCH --depth 1 git://anongit.freedesktop.org/git/gstreamer/gstreamer && \
 cd gstreamer && \
@@ -86,7 +95,7 @@ rm -rvf /gst-plugins-base
 
 
 # libnice
-ARG LIB_NICE_VERSION=0.1.15
+
 
 RUN git clone -b $LIB_NICE_VERSION git://anongit.freedesktop.org/libnice/libnice \
 && cd libnice \
@@ -102,6 +111,7 @@ RUN git clone -b $GIT_BRANCH --depth 1 git://anongit.freedesktop.org/git/gstream
 cd gst-plugins-good && \
 git checkout $GIT_BRANCH && \
 ./autogen.sh --prefix=/usr \
+--enable-ximagesrc-xfixes \
 --disable-gtk-doc \
 --disable-alpha \
 --disable-avi \
@@ -148,7 +158,7 @@ git checkout $GIT_BRANCH && \
 --disable-libdv \
 --disable-libpng \
 --disable-dv1394 \
-#--disable-vpx 
+#--disable-vpx
 && \
 make -j`nproc` && \
 make install && \
@@ -159,9 +169,11 @@ rm -rvf /gst-plugins-good
 #RUN git clone -b $GIT_BRANCH --depth 1 git://anongit.freedesktop.org/git/gstreamer/gst-plugins-bad && \
 #cd gst-plugins-bad && \
 #git checkout $GIT_BRANCH && \
-RUN git clone -b webrtc-port-range --depth 1 https://gitlab.freedesktop.org/ikreymer/gst-plugins-bad.git && \
+#RUN git clone -b webrtc-port-range --depth 1 https://gitlab.freedesktop.org/ikreymer/gst-plugins-bad.git && \
+RUN git clone -b $GIT_BRANCH --depth 1 https://github.com/GStreamer/gst-plugins-bad.git && \
 cd gst-plugins-bad && \
-git checkout webrtc-port-range && \
+#git checkout webrtc-port-range && \
+git checkout $GIT_BRANCH && \
 ./autogen.sh --prefix=/usr \
 --disable-gtk-doc \
 --disable-accurip \
@@ -321,7 +333,7 @@ git checkout $GIT_BRANCH && \
 --disable-cdio \
 --disable-dvdread \
 --disable-sidplay \
---disable-x264 \
+#--disable-x264 \
 && \
 make -j`nproc` && \
 make install && \
@@ -329,7 +341,7 @@ cd .. && \
 rm -rvf /gst-plugins-ugly
 
 
-ARG GST_PY_VERSION=1.14
+
 
 # install gst-python
 RUN git clone -b $GST_PY_VERSION --depth 1 git://anongit.freedesktop.org/git/gstreamer/gst-python && \
