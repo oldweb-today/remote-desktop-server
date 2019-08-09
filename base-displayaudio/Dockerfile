@@ -44,15 +44,10 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get install -y \
   libxfixes-dev
 
 
-# vp8 + opus = ok, h264 + opus = ok
-#ARG GST_PY_VERSION=1.14.4
-#ARG GIT_BRANCH=1.14.4
-#ARG LIB_NICE_VERSION=0.1.15
+ARG GIT_BRANCH=1.16
+ARG GST_PY_VERSION=1.16
+ARG LIB_NICE_VERSION=0.1.16
 
-# vp8 + audio = ok, h264 + audio = ko (empty audio)
-ARG GIT_BRANCH=1.15.2
-ARG GST_PY_VERSION=1.15.2
-ARG LIB_NICE_VERSION=0.1.15
 #
 # Fetch and build GStreamer
 RUN git clone -b $GIT_BRANCH --depth 1 git://anongit.freedesktop.org/git/gstreamer/gstreamer && \

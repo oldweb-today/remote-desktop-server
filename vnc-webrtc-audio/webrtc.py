@@ -1,5 +1,3 @@
-import random
-import ssl
 import websockets
 import asyncio
 import os
@@ -7,6 +5,10 @@ import sys
 import json
 import argparse
 import logging
+import hmac
+import base64
+import hashlib
+import time
 from concurrent.futures._base import TimeoutError
 
 import gi
@@ -19,24 +21,17 @@ from gi.repository import GstSdp
 
 
 # ============================================================================
-RTP_PORT = int(os.environ.get('RTP_PORT', '10235'))
-
 AUDIO_PIPELINE = "pulsesrc ! audioconvert ! opusenc ! rtpopuspay ! queue max-size-time=200 min-threshold-time=200000000 max-size-time=220000000  ! capsfilter caps=application/x-rtp,media=audio,encoding-name=OPUS,payload=96"
 
 VP8_PIPELINE = "ximagesrc show-pointer=false ! videoconvert ! queue ! vp8enc deadline=1  buffer-size=100 buffer-initial-size=100 buffer-optimal-size=100 keyframe-max-dist=30 cpu-used=5  ! rtpvp8pay ! queue ! capsfilter caps=application/x-rtp,media=video,encoding-name=VP8,payload=97"
 H264_PIPELINE = "ximagesrc show-pointer=false ! videoconvert ! queue ! x264enc tune=0x00000004 key-int-max=30 ! video/x-h264,profile=constrained-baseline,packetization-mode=1 ! rtph264pay ! queue max-size-time=50 ! capsfilter caps=application/x-rtp,media=video,encoding-name=H264,payload=97"
 
 
-
 AUDIO_WEBRTC_PIPELINE = '''
- webrtcbin name=sendrecv bundle-policy=max-bundle min-rtp-port={0} max-rtp-port={0} min-rtcp-port={1} max-rtcp-port={1}
+ webrtcbin name=sendrecv bundle-policy=max-bundle
  pulsesrc buffer-time=128000 latency-time=32000  ! audioconvert ! queue ! opusenc frame-size=2.5 ! rtpopuspay !
  queue ! application/x-rtp,media=audio,encoding-name=OPUS,payload=97 ! sendrecv.
-'''.format(RTP_PORT, RTP_PORT + 3)
-
-
-
-
+'''.format()
 
 # ============================================================================
 class WebRTCHandler:
@@ -69,18 +64,28 @@ class WebRTCHandler:
         element.emit('create-offer', None, promise)
 
     def send_ice_candidate_message(self, _, mlineindex, candidate):
-        # reject any non-host candidates
-        if 'typ host' not in candidate:
-            return
-
-        # reject any active connect ccandidates
-        if ' 9 ' in candidate:
-            return
 
         icemsg = json.dumps({'ice': {'candidate': candidate, 'sdpMLineIndex': mlineindex}})
 
         loop = asyncio.new_event_loop()
         loop.run_until_complete(self.ws.send(icemsg))
+
+    def generate_rest_api_credentials(self, username, secret):
+        # Coturn REST API
+        # usercombo -> "timestamp.username",
+        # turn user -> usercombo,
+        # turn password -> base64(hmac(input_buffer = usercombo, key = shared-secret)).
+        time_limit = int(os.environ.get("WEBRTC_TURN_TIME_LIMIT", '3600'))
+        separator = os.environ.get("WEBRTC_TURN_REST_API_SEPARATOR", '.').encode()
+        turn_username = username.encode()
+        turn_secret = secret.encode()
+        now = "{}".format(int(time.time() + time_limit)).encode()
+
+        username = separator.join([now, turn_username])
+        password = base64.b64encode(hmac.new(turn_secret, username, digestmod=hashlib.sha1).digest())
+
+        return {"username": username.decode("utf8"), "password": password.decode("utf8")}
+
 
     def start_pipeline(self):
         if os.environ.get('WEBRTC_VIDEO'):
@@ -88,10 +93,7 @@ class WebRTCHandler:
             audio = Gst.parse_bin_from_description(AUDIO_PIPELINE, True)
 
             webrtc = Gst.ElementFactory.make("webrtcbin", "sendrecv")
-            #webrtc.set_property("name", "sendonly");
-            webrtc.set_property('turn-server', "turn://1556469853_client46:hIb16HamWB5x1i9wokD2XxzSlqo=@h2.nfbonf.nfb.ca")
-            webrtc.set_property("stun-server", "stun://stun.l.google.com:19302");
-            webrtc.set_property("bundle-policy", "max-bundle");
+            webrtc.set_property('bundle-policy', 'max-bundle')
 
             pipe = Gst.Pipeline.new('main')
 
@@ -106,9 +108,8 @@ class WebRTCHandler:
         else:
             self.pipe = Gst.parse_launch(AUDIO_WEBRTC_PIPELINE)
 
-
-        #self.pipe = Gst.parse_launch(PIPELINE)
         self.webrtc = self.pipe.get_by_name('sendrecv')
+
         self.webrtc.connect('on-negotiation-needed', self.on_negotiation_needed)
         self.webrtc.connect('on-ice-candidate', self.send_ice_candidate_message)
         #self.webrtc.connect('notify::ice-connection-state', self.on_conn_changed)
@@ -138,10 +139,25 @@ class WebRTCHandler:
         assert self.ws
         while True:
             message = await self.recv_msg_ping()
+            iceServers = []
+            iceTransportPolicy = 'all'
             if message.startswith('HELLO'):
+                if os.environ.get("WEBRTC_STUN_SERVER") is not None:
+                    iceServers.append({"urls": os.environ.get("WEBRTC_STUN_SERVER")})
+                if os.environ.get("WEBRTC_TURN_REALM") is not None:
+                    turn_realm = os.environ.get('WEBRTC_TURN_REALM')
+                    turn_server = 'turn:' + turn_realm + '?transport=udp'
+
+                    username = os.environ.get("REQ_ID") + 'client'
+                    secret = os.environ.get('WEBRTC_TURN_REST_AUTH_SECRET')
+                    credentials = self.generate_rest_api_credentials(username, secret)
+                    iceServers.append({"urls": [turn_server] , "credential": credentials['password'], "username": credentials['username']});
+                    iceTransportPolicy = 'relay'
+
                 self.start_pipeline()
 
                 await self.ws.send('HELLO')
+                await self.ws.send(json.dumps({'iceServers':iceServers, 'iceTransportPolicy':iceTransportPolicy}))
 
             elif message.startswith('ERROR'):
                 print(message)
