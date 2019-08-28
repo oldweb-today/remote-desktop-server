@@ -26,6 +26,10 @@ AUDIO_PIPELINE = "pulsesrc ! audioconvert ! opusenc ! rtpopuspay ! queue max-siz
 VP8_PIPELINE = "ximagesrc show-pointer=false ! videoconvert ! queue ! vp8enc deadline=1  buffer-size=100 buffer-initial-size=100 buffer-optimal-size=100 keyframe-max-dist=30 cpu-used=5  ! rtpvp8pay ! queue ! capsfilter caps=application/x-rtp,media=video,encoding-name=VP8,payload=97"
 H264_PIPELINE = "ximagesrc show-pointer=false ! videoconvert ! queue ! x264enc tune=0x00000004 key-int-max=30 ! video/x-h264,profile=constrained-baseline,packetization-mode=1 ! rtph264pay ! queue max-size-time=50 ! capsfilter caps=application/x-rtp,media=video,encoding-name=H264,payload=97"
 
+PIPELINES = {'VP8': VP8_PIPELINE,
+             'H264': H264_PIPELINE
+            }
+
 
 AUDIO_WEBRTC_PIPELINE = '''
  webrtcbin name=sendrecv bundle-policy=max-bundle
@@ -87,12 +91,21 @@ class WebRTCHandler:
         return {"username": username.decode("utf8"), "password": password.decode("utf8")}
 
 
-    def start_pipeline(self):
+    def start_pipeline(self, formats):
+        pipeline = None
         if os.environ.get('WEBRTC_VIDEO'):
-            video = Gst.parse_bin_from_description(VP8_PIPELINE, True)
+            for format_type in formats:
+                pipeline = PIPELINES.get(format_type)
+                if pipeline:
+                    print('Video Format: ' + format_type)
+                    break
+
+            pipeline = pipeline or VP8_PIPELINE
+            video = Gst.parse_bin_from_description(pipeline, True)
+
             audio = Gst.parse_bin_from_description(AUDIO_PIPELINE, True)
 
-            webrtc = Gst.ElementFactory.make("webrtcbin", "sendrecv")
+            webrtc = Gst.ElementFactory.make("webrtcbin", "sendonly")
             webrtc.set_property('bundle-policy', 'max-bundle')
 
             pipe = Gst.Pipeline.new('main')
@@ -108,7 +121,7 @@ class WebRTCHandler:
         else:
             self.pipe = Gst.parse_launch(AUDIO_WEBRTC_PIPELINE)
 
-        self.webrtc = self.pipe.get_by_name('sendrecv')
+        self.webrtc = self.pipe.get_by_name('sendonly')
 
         self.webrtc.connect('on-negotiation-needed', self.on_negotiation_needed)
         self.webrtc.connect('on-ice-candidate', self.send_ice_candidate_message)
@@ -142,11 +155,12 @@ class WebRTCHandler:
             iceServers = []
             iceTransportPolicy = 'all'
             if message.startswith('HELLO'):
+                formats = json.loads(message[len('HELLO '):])
                 if os.environ.get("WEBRTC_STUN_SERVER") is not None:
                     iceServers.append({"urls": os.environ.get("WEBRTC_STUN_SERVER")})
                 if os.environ.get("WEBRTC_TURN_REALM") is not None:
                     turn_realm = os.environ.get('WEBRTC_TURN_REALM')
-                    turn_server = 'turn:' + turn_realm + '?transport=udp'
+                    turn_server = 'turn:' + turn_realm + '?transport=tcp'
 
                     username = os.environ.get("REQ_ID") + 'client'
                     secret = os.environ.get('WEBRTC_TURN_REST_AUTH_SECRET')
@@ -154,7 +168,7 @@ class WebRTCHandler:
                     iceServers.append({"urls": [turn_server] , "credential": credentials['password'], "username": credentials['username']});
                     iceTransportPolicy = 'relay'
 
-                self.start_pipeline()
+                self.start_pipeline(formats.get('formats', []))
 
                 await self.ws.send('HELLO')
                 await self.ws.send(json.dumps({'iceServers':iceServers, 'iceTransportPolicy':iceTransportPolicy}))
