@@ -9,12 +9,11 @@ mkdir -p ~/.vnc
 x11vnc -storepasswd ${VNC_PASS:-secret} ~/.vnc/passwd
 
 # start vnc
-
-if [[ -n "$WEBRTC_VIDEO" ]]; then
-    x11vnc -forever -ncache_cr -xdamage -usepw -shared -rfbport 5900 -slow_fb 10 -display $DISPLAY > /dev/null 2>&1 &
-else
-    x11vnc -forever -ncache_cr -xdamage -usepw -shared -rfbport 5900 -display $DISPLAY > /dev/null 2>&1 &
-fi
+#if [[ -n "$WEBRTC_VIDEO" ]]; then
+#    x11vnc -forever -ncache_cr -xdamage -usepw -shared -rfbport 5900 -slow_fb 10 -display $DISPLAY > /dev/null 2>&1 &
+#else
+#    x11vnc -forever -ncache_cr -xdamage -usepw -shared -rfbport 5900 -display $DISPLAY > /dev/null 2>&1 &
+#fi
 
 
 
