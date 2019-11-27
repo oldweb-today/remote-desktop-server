@@ -23,9 +23,9 @@ from gi.repository import GstSdp
 
 
 # ============================================================================
-AUDIO_PIPELINE = "pulsesrc ! audioconvert ! opusenc ! rtpopuspay ! queue max-size-time=200 min-threshold-time=200000000 max-size-time=220000000  ! capsfilter caps=application/x-rtp,media=audio,encoding-name=OPUS,payload=96"
+AUDIO_PIPELINE = "pulsesrc ! audioconvert ! opusenc frame-size=5 ! rtpopuspay ! queue max-size-time=200 min-threshold-time=200000000 max-size-time=220000000  ! capsfilter caps=application/x-rtp,media=audio,encoding-name=OPUS,payload=96"
 
-VP8_PIPELINE = "ximagesrc show-pointer=false ! videoconvert ! queue ! vp8enc deadline=1  buffer-size=100 buffer-initial-size=100 buffer-optimal-size=100 keyframe-max-dist=30 cpu-used=5  ! rtpvp8pay ! queue ! capsfilter caps=application/x-rtp,media=video,encoding-name=VP8,payload=97"
+VP8_PIPELINE = "ximagesrc show-pointer=false ! videoconvert ! queue ! vp8enc deadline=1  buffer-size=100 buffer-initial-size=100 buffer-optimal-size=100 keyframe-max-dist=30 cpu-used=-16  ! rtpvp8pay ! queue ! capsfilter caps=application/x-rtp,media=video,encoding-name=VP8,payload=97"
 H264_PIPELINE = "ximagesrc show-pointer=false ! videoconvert ! queue ! x264enc tune=0x00000004 key-int-max=30 ! video/x-h264,profile=constrained-baseline,packetization-mode=1 ! rtph264pay ! queue max-size-time=50 ! capsfilter caps=application/x-rtp,media=video,encoding-name=H264,payload=97"
 
 PIPELINES = {'VP8': VP8_PIPELINE,
@@ -34,10 +34,11 @@ PIPELINES = {'VP8': VP8_PIPELINE,
 
 
 AUDIO_WEBRTC_PIPELINE = '''
- webrtcbin name=sendrecv bundle-policy=max-bundle
- pulsesrc buffer-time=128000 latency-time=32000  ! audioconvert ! queue ! opusenc frame-size=2.5 ! rtpopuspay !
- queue ! application/x-rtp,media=audio,encoding-name=OPUS,payload=97 ! sendrecv.
+ webrtcbin name=sendonly bundle-policy=max-bundle
+ pulsesrc buffer-time=128000 latency-time=32000  ! audioconvert ! queue ! opusenc frame-size=5 ! rtpopuspay !
+ queue ! application/x-rtp,media=audio,encoding-name=OPUS,payload=97 ! sendonly.
 '''.format()
+
 
 # ============================================================================
 class WebRTCHandler:
@@ -82,7 +83,7 @@ class WebRTCHandler:
         if format == 'mp3':
             command = 'gst-launch-1.0 -v pulsesrc buffer-time=128000 latency-time=32000 ! audioconvert ! lamemp3enc target=bitrate cbr=true bitrate=192 ! tcpserversink port=5555'
         else:
-            command = 'gst-launch-1.0 -v pulsesrc buffer-time=128000 latency-time=32000 ! audio/x-raw, channels=2, rate=24000 ! audioconvert ! opusenc complexity=0 frame-size=2.5 ! webmmux streamable=true ! tcpserversink port=5555'
+            command = 'gst-launch-1.0 -v pulsesrc buffer-time=128000 latency-time=32000 ! audio/x-raw, channels=2, rate=24000 ! audioconvert ! opusenc complexity=0 frame-size=5 ! webmmux streamable=true ! tcpserversink port=5555'
         print('Opening {command}'.format(**locals()))
         pid = subprocess.Popen(command.split(' '))
         wait_for_port(5555)
@@ -115,23 +116,11 @@ class WebRTCHandler:
         return {"username": username.decode("utf8"), "password": password.decode("utf8")}
 
 
-    async def send_ice_servers(self):
-        iceServers = []
-        iceTransportPolicy = 'all'
-        if os.environ.get("WEBRTC_STUN_SERVER") is not None:
-            iceServers.append({"urls": os.environ.get("WEBRTC_STUN_SERVER")})
-        if os.environ.get("WEBRTC_TURN_REALM") is not None:
-            turn_realm = os.environ.get('WEBRTC_TURN_REALM')
-            turn_server = 'turn:' + turn_realm + '?transport=tcp'
-
-            username = os.environ.get("REQ_ID") + 'client'
-            secret = os.environ.get('WEBRTC_TURN_REST_AUTH_SECRET')
-            credentials = self.generate_rest_api_credentials(username, secret)
-            iceServers.append({"urls": [turn_server] , "credential": credentials['password'], "username": credentials['username']});
-            iceTransportPolicy = 'relay'
-
-
-        await self.ws.send(json.dumps({'iceServers':iceServers, 'iceTransportPolicy':iceTransportPolicy}))
+    async def send_ice_credentials(self):
+        username = os.environ.get("REQ_ID") + 'client'
+        secret = os.environ.get('WEBRTC_TURN_REST_AUTH_SECRET')
+        credentials = self.generate_rest_api_credentials(username, secret)
+        await self.ws.send(json.dumps(credentials))
 
     def launch_x11vnc(self, slow_fb=False):
         display = os.environ.get('DISPLAY')
@@ -147,10 +136,12 @@ class WebRTCHandler:
         print('x11 pid is {}'.format(pid))
 
 
-    def start_pipeline(self, formats):
+    def start_pipeline(self, video_formats, audio_only):
         pipeline = None
-        if os.environ.get('WEBRTC_VIDEO'):
-            for format_type in formats:
+        video = None
+
+        if not audio_only:
+            for format_type in video_formats:
                 pipeline = PIPELINES.get(format_type)
                 if pipeline:
                     print('Video Format: ' + format_type)
@@ -159,23 +150,26 @@ class WebRTCHandler:
             pipeline = pipeline or VP8_PIPELINE
             video = Gst.parse_bin_from_description(pipeline, True)
 
-            audio = Gst.parse_bin_from_description(AUDIO_PIPELINE, True)
+        audio = Gst.parse_bin_from_description(AUDIO_PIPELINE, True)
 
-            webrtc = Gst.ElementFactory.make("webrtcbin", "sendonly")
-            webrtc.set_property('bundle-policy', 'max-bundle')
+        webrtc = Gst.ElementFactory.make("webrtcbin", "sendonly")
+        webrtc.set_property('bundle-policy', 'max-bundle')
 
-            pipe = Gst.Pipeline.new('main')
+        pipe = Gst.Pipeline.new('main')
 
+        if video:
             pipe.add(video)
-            pipe.add(audio)
-            pipe.add(webrtc)
+        pipe.add(audio)
+        pipe.add(webrtc)
 
+        if video:
             video.link(webrtc)
-            audio.link(webrtc)
 
-            self.pipe = pipe
-        else:
-            self.pipe = Gst.parse_launch(AUDIO_WEBRTC_PIPELINE)
+        audio.link(webrtc)
+
+        self.pipe = pipe
+        #else:
+            #self.pipe = Gst.parse_launch(AUDIO_WEBRTC_PIPELINE)
 
         self.webrtc = self.pipe.get_by_name('sendonly')
 
@@ -188,12 +182,13 @@ class WebRTCHandler:
         #assert (self.webrtc)
         msg = json.loads(message)
         if 'webrtc' in msg:
-            self.launch_x11vnc(slow_fb=msg['webrtc'])
+            video_formats = msg.get('webrtc_video')
+            audio_only = not video_formats
+            self.launch_x11vnc(slow_fb=not audio_only)
             time.sleep(1)
-            if msg['webrtc']:
-                print('sending ice servers')
-                await self.send_ice_servers()
-                self.start_pipeline(msg.get('webrtc_video', []))
+            print('sending ice credentials')
+            await self.send_ice_credentials()
+            self.start_pipeline(video_formats, audio_only)
         if 'ms_audio' in msg:
             ms_audio = msg['ms_audio']
             if ms_audio == 'reset':

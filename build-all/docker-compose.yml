@@ -5,7 +5,10 @@ services:
     # Base for display + audio transport
     base-displayaudio:
         image: oldwebtoday/base-displayaudio
-        build: ../base-displayaudio
+        build:
+            context: ../base-displayaudio
+            args:
+              GIT_COMMIT: 44623cacd637efb8f6cf93512238cdad575b9f60
 
     # VNC + WS AUDIO
     vnc-ws-audio:

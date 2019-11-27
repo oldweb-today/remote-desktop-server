@@ -45,14 +45,15 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get install -y \
 
 
 ARG GIT_BRANCH=1.16
+ARG GIT_COMMIT=1.16
 ARG GST_PY_VERSION=1.16
 ARG LIB_NICE_VERSION=0.1.16
 
 #
 # Fetch and build GStreamer
-RUN git clone -b $GIT_BRANCH --depth 1 git://anongit.freedesktop.org/git/gstreamer/gstreamer && \
+RUN git clone -b $GIT_BRANCH git://anongit.freedesktop.org/git/gstreamer/gstreamer && \
 cd gstreamer && \
-git checkout $GIT_BRANCH && \
+git checkout $GIT_COMMIT && \
 ./autogen.sh --prefix=/usr --disable-gtk-doc && \
 make -j`nproc` && \
 make install && \
