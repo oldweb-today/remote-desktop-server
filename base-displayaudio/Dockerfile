@@ -44,16 +44,13 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get install -y \
   libxfixes-dev
 
 
-ARG GIT_BRANCH=1.16
-ARG GIT_COMMIT=1.16
-ARG GST_PY_VERSION=1.16
+ARG GIT_COMMIT=1.16.2
 ARG LIB_NICE_VERSION=0.1.16
 
 #
 # Fetch and build GStreamer
-RUN git clone -b $GIT_BRANCH git://anongit.freedesktop.org/git/gstreamer/gstreamer && \
+RUN git clone -b $GIT_COMMIT git://anongit.freedesktop.org/git/gstreamer/gstreamer && \
 cd gstreamer && \
-git checkout $GIT_COMMIT && \
 ./autogen.sh --prefix=/usr --disable-gtk-doc && \
 make -j`nproc` && \
 make install && \
@@ -61,9 +58,8 @@ cd .. && \
 rm -rvf /gstreamer
 
 # Fetch and build gst-plugins-base
-RUN git clone -b $GIT_BRANCH --depth 1 git://anongit.freedesktop.org/git/gstreamer/gst-plugins-base && \
+RUN git clone -b $GIT_COMMIT --depth 1 git://anongit.freedesktop.org/git/gstreamer/gst-plugins-base && \
 cd gst-plugins-base && \
-git checkout $GIT_BRANCH && \
 ./autogen.sh --prefix=/usr \
 --disable-gtk-doc \
 --disable-adder \
@@ -103,9 +99,8 @@ rm -rvf /libnice
 
 
 # Fetch and build gst-plugins-good
-RUN git clone -b $GIT_BRANCH --depth 1 git://anongit.freedesktop.org/git/gstreamer/gst-plugins-good && \
+RUN git clone -b $GIT_COMMIT --depth 1 git://anongit.freedesktop.org/git/gstreamer/gst-plugins-good && \
 cd gst-plugins-good && \
-git checkout $GIT_BRANCH && \
 ./autogen.sh --prefix=/usr \
 --enable-ximagesrc-xfixes \
 --disable-gtk-doc \
@@ -166,10 +161,8 @@ rm -rvf /gst-plugins-good
 #cd gst-plugins-bad && \
 #git checkout $GIT_BRANCH && \
 #RUN git clone -b webrtc-port-range --depth 1 https://gitlab.freedesktop.org/ikreymer/gst-plugins-bad.git && \
-RUN git clone -b $GIT_BRANCH --depth 1 https://github.com/GStreamer/gst-plugins-bad.git && \
+RUN git clone -b $GIT_COMMIT --depth 1 https://github.com/GStreamer/gst-plugins-bad.git && \
 cd gst-plugins-bad && \
-#git checkout webrtc-port-range && \
-git checkout $GIT_BRANCH && \
 ./autogen.sh --prefix=/usr \
 --disable-gtk-doc \
 --disable-accurip \
@@ -313,9 +306,8 @@ rm -rvf /gst-plugins-bad && echo ""
 
 
 # Fetch and build gst-plugins-ugly
-RUN git clone -b $GIT_BRANCH --depth 1 git://anongit.freedesktop.org/git/gstreamer/gst-plugins-ugly && \
+RUN git clone -b $GIT_COMMIT --depth 1 git://anongit.freedesktop.org/git/gstreamer/gst-plugins-ugly && \
 cd gst-plugins-ugly && \
-git checkout $GIT_BRANCH && \
 ./autogen.sh --prefix=/usr \
 --disable-gtk-doc \
 --disable-asfdemux \
@@ -340,9 +332,8 @@ rm -rvf /gst-plugins-ugly
 
 
 # install gst-python
-RUN git clone -b $GST_PY_VERSION --depth 1 git://anongit.freedesktop.org/git/gstreamer/gst-python && \
+RUN git clone -b $GIT_COMMIT --depth 1 git://anongit.freedesktop.org/git/gstreamer/gst-python && \
 cd gst-python && \
-git checkout $GST_PY_VERSION && \
 ./autogen.sh --prefix=/usr && \
 make -j`nproc` && \
 make install && \

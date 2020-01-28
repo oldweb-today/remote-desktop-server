@@ -1,0 +1,19 @@
+version: '3'
+
+# Build All Base Images
+services:
+    # Base for display + audio transport
+    base-displayaudio:
+        image: oldwebtoday/base-displayaudio
+        build:
+            context: ./base-displayaudio
+            args:
+              GIT_COMMIT: '1.16.2'
+
+    # VNC + WetRTC AUDIO
+    remote-desktop-server:
+        image: oldwebtoday/remote-desktop-server
+        build: ./remote-desktop-server
+        depends_on:
+            - base-displayaudio
+

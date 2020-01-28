@@ -15,10 +15,12 @@ RUN pip3 install -U setuptools pip
 
 RUN pip3 install -U -r requirements.txt
 
-COPY audio_stream.sh /app/audio_stream.sh
 COPY rebind.so /usr/local/lib/rebind.so
 
-COPY run.sh /app
+COPY . /app/
+
+RUN ln -s /usr/lib/python2.7/config-x86_64-linux-gnu/libpython2.7.so /usr/lib/libpython2.7.so
 
 CMD /app/run.sh
+
 

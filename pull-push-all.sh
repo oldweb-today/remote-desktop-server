@@ -8,6 +8,5 @@ if [ ! -z $1 ]; then
 fi
 
 docker $action oldwebtoday/base-displayaudio
-docker $action oldwebtoday/vnc-ws-audio
-docker $action oldwebtoday/vnc-webrtc-audio
+docker $action oldwebtoday/remote-desktop-server
 
