@@ -32,12 +32,10 @@ PIPELINES = {'VP8': VP8_PIPELINE,
              'H264': H264_PIPELINE
             }
 
+# standalone audio pipelines
+AUDIO_MS_MP3_PIPELINE = 'gst-launch-1.0 -v pulsesrc buffer-time=128000 latency-time=32000 ! audioconvert ! lamemp3enc target=bitrate cbr=true bitrate=192 ! tcpserversink port=5555'
 
-AUDIO_WEBRTC_PIPELINE = '''
- webrtcbin name=sendonly bundle-policy=max-bundle
- pulsesrc buffer-time=128000 latency-time=32000  ! audioconvert ! queue ! opusenc frame-size=5 ! rtpopuspay !
- queue ! application/x-rtp,media=audio,encoding-name=OPUS,payload=97 ! sendonly.
-'''.format()
+AUDIO_MS_OPUS_PIPELINE = 'gst-launch-1.0 -v pulsesrc buffer-time=128000 latency-time=32000 ! audio/x-raw, channels=2, rate=24000 ! audioconvert ! opusenc complexity=0 frame-size=5 ! webmmux streamable=true ! tcpserversink port=5555'
 
 
 # ============================================================================
@@ -81,9 +79,10 @@ class WebRTCHandler:
 
     async def start_ms_audio(self, format):
         if format == 'mp3':
-            command = 'gst-launch-1.0 -v pulsesrc buffer-time=128000 latency-time=32000 ! audioconvert ! lamemp3enc target=bitrate cbr=true bitrate=192 ! tcpserversink port=5555'
+            command = AUDIO_MS_MP3_PIPELINE
         else:
-            command = 'gst-launch-1.0 -v pulsesrc buffer-time=128000 latency-time=32000 ! audio/x-raw, channels=2, rate=24000 ! audioconvert ! opusenc complexity=0 frame-size=5 ! webmmux streamable=true ! tcpserversink port=5555'
+            command = AUDIO_MS_OPUS_PIPELINE
+
         print('Opening {command}'.format(**locals()))
         pid = subprocess.Popen(command.split(' '))
         wait_for_port(5555)
@@ -96,9 +95,6 @@ class WebRTCHandler:
             await self.ws.send(data)
         s.close()
         os.kill(pid)
-
-
-
 
     def generate_rest_api_credentials(self, username, secret):
         # Coturn REST API
@@ -122,10 +118,10 @@ class WebRTCHandler:
         credentials = self.generate_rest_api_credentials(username, secret)
         await self.ws.send(json.dumps(credentials))
 
-    def launch_x11vnc(self, slow_fb=False):
+    def launch_x11vnc(self, vnc_video=True):
         display = os.environ.get('DISPLAY')
         command = 'x11vnc -forever -ncache_cr -xdamage -usepw -shared -rfbport 5900 -display ' + display
-        if slow_fb:
+        if not vnc_video:
             command = command + ' --slow_fb 10 --noxrandr'
         process_exist = subprocess.call(['ps', '-C', 'x11vnc'])
         if process_exist == 0:
@@ -135,6 +131,7 @@ class WebRTCHandler:
         pid = subprocess.Popen(command.split(' ')).pid
         print('x11 pid is {}'.format(pid))
 
+        websockify_pid = subprocess.Popen(['websockify', '6080', 'localhost:5900']).pid
 
     def start_pipeline(self, video_formats, audio_only):
         pipeline = None
@@ -168,8 +165,6 @@ class WebRTCHandler:
         audio.link(webrtc)
 
         self.pipe = pipe
-        #else:
-            #self.pipe = Gst.parse_launch(AUDIO_WEBRTC_PIPELINE)
 
         self.webrtc = self.pipe.get_by_name('sendonly')
 
@@ -184,7 +179,7 @@ class WebRTCHandler:
         if 'webrtc' in msg:
             video_formats = msg.get('webrtc_video')
             audio_only = not video_formats
-            self.launch_x11vnc(slow_fb=not audio_only)
+            self.launch_x11vnc(audio_only)
             time.sleep(1)
             print('sending ice credentials')
             await self.send_ice_credentials()
